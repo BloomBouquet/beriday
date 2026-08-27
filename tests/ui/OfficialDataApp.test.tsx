@@ -106,4 +106,37 @@ describe('OfficialDataApp', () => {
     expect(within(generalCard!).getByText('가능')).toBeInTheDocument();
     expect(within(generalCard!).getByText('19:00~23:00')).toBeInTheDocument();
   });
+
+  it('fails closed when the official asset request returns an HTTP error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => '',
+      }),
+    );
+
+    render(<OfficialDataApp />);
+
+    expect(await screen.findByRole('heading', { name: '데이터를 불러오지 못했습니다.' })).toBeInTheDocument();
+    expect(screen.getByText('공식 데이터 파일을 확인할 수 없어 배출 가능 여부를 표시하지 않습니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '지역 설정하기' })).not.toBeInTheDocument();
+  });
+
+  it('fails closed when the fetched official asset is malformed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => '{not-valid-json',
+      }),
+    );
+
+    render(<OfficialDataApp />);
+
+    expect(await screen.findByRole('heading', { name: '데이터를 불러오지 못했습니다.' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '지역 설정하기' })).not.toBeInTheDocument();
+    expect(screen.queryByText('일곡동')).not.toBeInTheDocument();
+  });
 });
