@@ -5,7 +5,8 @@ import { buildWeeklySchedule, type WeeklyScheduleDay } from './domain/schedule/b
 import { evaluateSchedule, type ScheduleResult, type ScheduleStatus } from './domain/schedule/evaluateSchedule';
 import type { CollectionRule, RuleProvenance, TimeWindow, WasteCategory } from './domain/waste/types';
 import { isAllowedOfficialUrl } from './security/officialUrl';
-import { getSavedRegion, saveRegion } from './storage/savedRegion';
+import { SettingsView } from './settings/SettingsView';
+import { clearSavedRegion, getSavedRegion, saveRegion } from './storage/savedRegion';
 
 export type RegionOption = {
   regionId: string;
@@ -27,7 +28,7 @@ type AppProps = {
   dataSummary?: DataVerificationSummary | null;
 };
 
-type View = 'home' | 'setup' | 'today' | 'weekly' | 'search' | 'bulk';
+type View = 'home' | 'setup' | 'today' | 'weekly' | 'search' | 'bulk' | 'settings';
 
 type TodayItem = {
   category: Extract<WasteCategory, 'general' | 'food' | 'recycling'>;
@@ -688,8 +689,8 @@ function BulkDisposalView({
   const guide = getBulkDisposalGuide(region.sido, region.sigungu);
   const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
   const fallbackSources = uniqueProvenance(regionRules).filter(
-  (source) => source.authorityName || source.authorityContact,
-);
+    (source) => source.authorityName || source.authorityContact,
+  );
   const canLinkGuide = Boolean(guide && isAllowedOfficialUrl(guide.procedureUrl));
 
   return (
@@ -735,19 +736,19 @@ function BulkDisposalView({
             </div>
           </>
         ) : (
-<div className="search-result-section">
-  {fallbackSources.length > 0 ? (
-    fallbackSources.map((source) => (
-      <div key={provenanceKey(source)}>
-        <strong>{source.authorityName ?? `${region.sigungu} 담당기관`}</strong>
-        {source.authorityContact && <span>{source.authorityContact}</span>}
-      </div>
-    ))
-  ) : (
-    <strong>{region.sigungu} 담당기관</strong>
-  )}
-  <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
-</div>
+          <div className="search-result-section">
+            {fallbackSources.length > 0 ? (
+              fallbackSources.map((source) => (
+                <div key={provenanceKey(source)}>
+                  <strong>{source.authorityName ?? `${region.sigungu} 담당기관`}</strong>
+                  {source.authorityContact && <span>{source.authorityContact}</span>}
+                </div>
+              ))
+            ) : (
+              <strong>{region.sigungu} 담당기관</strong>
+            )}
+            <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
+          </div>
         )}
 
         <div className="search-result-source">
@@ -782,6 +783,12 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
     setView('today');
   };
 
+  const clearLocalRegion = () => {
+    clearSavedRegion();
+    setRegion(null);
+    setView('home');
+  };
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -795,6 +802,9 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           <span>버리데이</span>
         </a>
         <span className="source-chip">공공데이터 기반</span>
+        {region && (
+          <button className="secondary-button" type="button" onClick={() => setView('settings')}>설정</button>
+        )}
       </header>
 
       {view === 'home' && <HomeView onStart={() => setView('setup')} />}
@@ -835,6 +845,16 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           onSearch={() => setView('search')}
           onToday={() => setView('today')}
           onChangeRegion={() => setView('setup')}
+        />
+      )}
+      {view === 'settings' && region && (
+        <SettingsView
+          region={region}
+          rules={rules}
+          dataSummary={dataSummary}
+          onToday={() => setView('today')}
+          onChangeRegion={() => setView('setup')}
+          onClearLocalData={clearLocalRegion}
         />
       )}
     </main>
