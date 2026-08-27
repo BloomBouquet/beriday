@@ -17,20 +17,23 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Probe official production dataset
+      - name: Probe official Open API access
+        env:
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
         run: |
           set -euo pipefail
-          curl --fail --location --retry 2 --user-agent 'BeridayDataRefresh/1.0' \
-            'https://file.localdata.go.kr/file/household_waste_info/info' \
-            --output /tmp/official-household-waste.csv
-          echo "downloaded_bytes=$(wc -c < /tmp/official-household-waste.csv)"
-          head -c 160 /tmp/official-household-waste.csv | tr '\n' ' '
-          echo
-          npm run build:official-data -- \
-            --input /tmp/official-household-waste.csv \
-            --output /tmp/official-data.json \
-            --imported-at 2026-08-28T00:00:00.000Z
-          node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('/tmp/official-data.json','utf8')); console.log(JSON.stringify({regions:data.regions.length,rules:data.rules.length,reports:data.reports},null,2));"
+          if [ -z "${DATA_GO_KR_API_KEY:-}" ]; then
+            echo 'DATA_GO_KR_API_KEY is not configured for this repository or organization.' >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --get \
+            'https://apis.data.go.kr/1741000/household_waste_info/info' \
+            --data-urlencode "serviceKey=${DATA_GO_KR_API_KEY}" \
+            --data-urlencode 'pageNo=1' \
+            --data-urlencode 'numOfRows=1' \
+            --data-urlencode 'returnType=json' \
+            --output /tmp/official-api.json
+          node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('/tmp/official-api.json','utf8')); console.log(JSON.stringify({type:Array.isArray(data)?'array':typeof data,keys:data&&typeof data==='object'?Object.keys(data).slice(0,12):[]},null,2));"
       - name: Domain tests
         run: npm run test:domain
       - name: UI tests when configured
