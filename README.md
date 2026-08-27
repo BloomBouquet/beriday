@@ -23,6 +23,10 @@
 - 행정안전부 전국생활쓰레기배출정보 표준 CSV source parser
 - UTF-8 BOM, quoted comma/newline, escaped quote 처리
 - 공식 CSV 필수 헤더 및 필수 지역 키 검증
+- `관리구역대상지역명` 기반 사용자 선택 지역 canonical catalog 생성
+- 사용자 선택 지역과 `관리구역명` 수거권역을 별도 엔티티로 분리
+- 동일 target→collection zone 중복 source provenance 병합
+- 한 대상지역이 여러 수거권역에 매핑되면 selectable catalog에서 제외하고 ambiguous 보고
 
 ## 검증
 
@@ -51,6 +55,9 @@ GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, pr
 - GPS와 상세 주소를 요청하거나 저장하지 않습니다.
 - CSV source parser는 `관리구역명`과 `관리구역대상지역명`을 별도로 보존합니다.
 - `관리구역명`은 `1권역` 같은 수거 관리권역일 수 있으므로 사용자 행정동으로 간주하지 않습니다.
-- `관리구역대상지역명`의 실제 대상지역과 수거 관리권역 사이의 매핑은 별도 canonical mapping 단계에서 검증한 뒤 UI에 연결합니다.
+- `관리구역대상지역명`에 명시된 대상지역만 사용자 선택 지역 후보로 생성합니다.
+- 대상지역 정보가 없는 source row는 임의의 선택 지역을 생성하지 않고 unresolved로 보고합니다.
+- 같은 대상지역이 서로 다른 수거권역에 연결되면 임의로 하나를 선택하지 않고 selectable catalog에서 제외합니다.
+- 같은 대상지역→수거권역 연결이 여러 source row에 반복되면 association은 하나로 합치되 source row와 기준일 provenance는 보존합니다.
 
-다음 구현 단계는 source parser 결과를 사용자 대상지역 → 수거 관리권역 구조로 변환하고, 그 검증된 mapping을 기존 region/rule 도메인에 연결하는 작업입니다.
+다음 구현 단계는 검증된 target-area association을 공식 생활/음식물/재활용 일정 필드와 결합해 기존 CollectionRule 도메인으로 변환하는 작업입니다.

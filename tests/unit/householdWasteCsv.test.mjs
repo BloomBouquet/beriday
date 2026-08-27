@@ -34,6 +34,7 @@ test('parses official headers, BOM, target areas, and quoted commas without losi
   assert.equal(result.report.acceptedRows, 1);
   assert.equal(result.report.rejectedRows, 0);
   assert.deepEqual(result.rows[0], {
+    sourceRow: 1,
     sido: '광주광역시',
     sigungu: '북구',
     managementAreaName: '1권역',
@@ -79,6 +80,18 @@ test('rejects source rows with missing required region keys instead of inventing
   assert.deepEqual(result.report.errors, [
     { row: 1, code: 'missing-region-key', message: 'Missing 시도명, 시군구명, or 관리구역명' },
   ]);
+});
+
+test('preserves the original CSV data-row number after an earlier row is rejected', () => {
+  const invalid = '광주광역시,,1권역,일곡동,봉투,전용용기,분리배출,월,화,수,18:00,23:00,18:00,23:00,18:00,23:00,,청소과,062-000-0000,2026-08-25';
+  const valid = '광주광역시,북구,2권역,매곡동,봉투,전용용기,분리배출,월,화,수,18:00,23:00,18:00,23:00,18:00,23:00,,청소과,062-000-0000,2026-08-26';
+  const csv = `${headers}\n${invalid}\n${valid}`;
+
+  const result = parseOfficialHouseholdWasteCsv(csv);
+
+  assert.equal(result.report.rejectedRows, 1);
+  assert.equal(result.report.acceptedRows, 1);
+  assert.equal(result.rows[0].sourceRow, 2);
 });
 
 test('fails fast when the official CSV header contract is missing', () => {
