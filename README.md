@@ -19,7 +19,8 @@
 - React/Vite 첫 방문 화면
 - 시/도 → 시/군/구 → 관리구역 지역 선택 흐름
 - 선택 지역 LocalStorage 저장 및 재진입 복원
-- Today 화면 진입 상태
+- Today 화면에서 공식 rule 기반 `가능`/`예정`/`마감`/`불가`/`확인 필요` 상태 계산
+- rule이 없거나 ambiguous한 카테고리는 임의 판단하지 않고 `확인 필요` 처리
 - 행정안전부 전국생활쓰레기배출정보 표준 CSV source parser
 - UTF-8 BOM, quoted comma/newline, escaped quote 처리
 - 공식 CSV 필수 헤더 및 필수 지역 키 검증
@@ -38,6 +39,8 @@
 - JSON asset loader에서 malformed JSON, 지원하지 않는 schema version, 필수 top-level shape를 fail-fast 검증
 - 공식 CSV 파일을 deterministic JSON asset으로 만드는 CLI build command
 - CLI 필수 인자 검증 및 CSV validation 실패 시 기존 output 보존
+- 브라우저 시작 시 `/data/official-data.json`을 read-only로 로드하고 schema v1 검증 후 지역/rule을 앱에 주입
+- 공식 asset HTTP 오류 또는 malformed JSON이면 fallback 없이 `데이터를 불러오지 못했습니다.` 상태로 fail-closed
 
 ## 검증
 
@@ -68,6 +71,17 @@ npm run build:official-data -- \
 - CSV/header/domain 검증이 실패하면 output 쓰기 전에 종료하므로 기존 asset을 덮어쓰지 않습니다.
 - 실제 공식 CSV 전체 ingest가 검증되기 전에는 fixture 기반 JSON을 production asset으로 사용하지 않습니다.
 
+## 브라우저 데이터 로딩
+
+production 앱은 시작할 때 같은 origin의 `/data/official-data.json`만 읽습니다.
+
+- 응답이 성공하면 `loadOfficialDataAsset()`으로 schema version과 필수 top-level shape를 검증합니다.
+- 검증된 `regions`만 지역 선택 catalog로 사용합니다.
+- 검증된 `rules`만 선택 지역의 Today 계산에 사용합니다.
+- HTTP 오류, JSON 파싱 오류, 지원하지 않는 schema version은 모두 오류 상태로 전환합니다.
+- 오류 상태에서는 테스트 fixture나 임의 지역을 fallback으로 노출하지 않습니다.
+- verified rule이 없는 카테고리는 `불가`로 단정하지 않고 `확인 필요`로 표시합니다.
+
 ## 데이터 원칙
 
 실제 production 일정은 행정안전부 전국생활쓰레기배출정보표준데이터 원본을 정규화하고 검증한 뒤 사용합니다.
@@ -78,7 +92,7 @@ npm run build:official-data -- \
 
 - `data/fixtures`는 테스트 전용이며 실제 지자체 배출 규칙으로 사용하지 않습니다.
 - production 앱에는 테스트용 지역 catalog를 기본으로 포함하지 않습니다.
-- 공식 지역 catalog가 연결되지 않은 상태에서는 지역 선택 화면에 `지역 데이터 준비 중`을 표시합니다.
+- production official asset이 없거나 검증에 실패하면 지역/일정을 추측하지 않고 오류 상태를 표시합니다.
 - 공식 일정이 연결되기 전에는 배출 가능 여부를 추측하거나 생성하지 않습니다.
 - GPS와 상세 주소를 요청하거나 저장하지 않습니다.
 - CSV source parser는 `관리구역명`과 `관리구역대상지역명`을 별도로 보존합니다.
@@ -98,4 +112,4 @@ npm run build:official-data -- \
 - asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
 - 실제 공식 CSV 전체 ingest가 성공하기 전에는 테스트 fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 검증된 official JSON asset을 브라우저가 read-only로 로드해 지역 선택 catalog와 Today 화면에 연결하는 작업입니다.
+다음 구현 단계는 실제 전국 공식 CSV 전체 ingest를 수행해 production asset을 생성·검증하고, 검증 report와 출처 정보를 사용자 화면에 연결하는 작업입니다.
