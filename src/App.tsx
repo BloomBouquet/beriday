@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { buildWeeklySchedule, type WeeklyScheduleDay } from './domain/schedule/buildWeeklySchedule';
 import { evaluateSchedule, type ScheduleResult, type ScheduleStatus } from './domain/schedule/evaluateSchedule';
 import type { CollectionRule, RuleProvenance, TimeWindow, WasteCategory } from './domain/waste/types';
 import { isAllowedOfficialUrl } from './security/officialUrl';
@@ -24,7 +25,7 @@ type AppProps = {
   dataSummary?: DataVerificationSummary | null;
 };
 
-type View = 'home' | 'setup' | 'today';
+type View = 'home' | 'setup' | 'today' | 'weekly';
 
 type TodayItem = {
   category: Extract<WasteCategory, 'general' | 'food' | 'recycling'>;
@@ -48,6 +49,34 @@ const STATUS_LABELS: Record<ScheduleStatus, string> = {
   closed: '마감',
   unavailable: '불가',
   'needs-verification': '확인 필요',
+};
+
+const CATEGORY_LABELS: Record<WasteCategory, string> = {
+  general: '일반쓰레기',
+  food: '음식물',
+  recycling: '재활용',
+  bulk: '대형폐기물',
+  other: '기타',
+};
+
+const WEEKDAY_SHORT: Record<number, string> = {
+  0: '일',
+  1: '월',
+  2: '화',
+  3: '수',
+  4: '목',
+  5: '금',
+  6: '토',
+};
+
+const WEEKDAY_FULL: Record<number, string> = {
+  0: '일요일',
+  1: '월요일',
+  2: '화요일',
+  3: '수요일',
+  4: '목요일',
+  5: '금요일',
+  6: '토요일',
 };
 
 function findRegion(regions: readonly RegionOption[], regionId: string): RegionOption | null {
@@ -90,6 +119,26 @@ function formatImportedAt(value: string): string {
     minute: '2-digit',
     hour12: false,
   }).format(date);
+}
+
+function dateParts(dateKey: string): { month: number; day: number } {
+  const [, month, day] = dateKey.split('-').map(Number);
+  return { month, day };
+}
+
+function formatWeekDate(dateKey: string): string {
+  const { month, day } = dateParts(dateKey);
+  return `${month}.${day}`;
+}
+
+function formatWeekRange(days: readonly WeeklyScheduleDay[]): string {
+  if (days.length === 0) return '';
+  return `${formatWeekDate(days[0].dateKey)} ~ ${formatWeekDate(days[days.length - 1].dateKey)}`;
+}
+
+function weeklyDayAriaLabel(day: WeeklyScheduleDay): string {
+  const parts = dateParts(day.dateKey);
+  return `${WEEKDAY_FULL[day.weekday]} ${parts.month}월 ${parts.day}일`;
 }
 
 function uniqueProvenance(rules: readonly CollectionRule[]): RuleProvenance[] {
@@ -366,11 +415,13 @@ function TodayView({
   region,
   rules,
   dataSummary,
+  onWeekly,
   onChangeRegion,
 }: {
   region: RegionOption;
   rules: readonly CollectionRule[];
   dataSummary: DataVerificationSummary | null;
+  onWeekly: () => void;
   onChangeRegion: () => void;
 }) {
   const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
@@ -387,7 +438,10 @@ function TodayView({
           <p className="region-name">{region.sido} {region.sigungu} {region.areaName}</p>
           <h1 id="today-title">오늘의 배출</h1>
         </div>
-        <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
+        <div className="today-actions">
+          <button className="secondary-button" type="button" onClick={onWeekly}>주간 일정 보기</button>
+          <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
+        </div>
       </div>
 
       <div className="sample-banner" role="note">
@@ -420,6 +474,73 @@ function TodayView({
       </div>
 
       <DataTrustPanel rules={regionRules} dataSummary={dataSummary} />
+    </section>
+  );
+}
+
+function WeeklyView({
+  region,
+  rules,
+  onToday,
+  onChangeRegion,
+}: {
+  region: RegionOption;
+  rules: readonly CollectionRule[];
+  onToday: () => void;
+  onChangeRegion: () => void;
+}) {
+  const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
+  const schedule = buildWeeklySchedule([...regionRules], new Date());
+
+  return (
+    <section className="weekly-page" aria-labelledby="weekly-title">
+      <div className="today-header">
+        <div>
+          <p className="eyebrow">선택한 지역</p>
+          <p className="region-name">{region.sido} {region.sigungu} {region.areaName}</p>
+          <h1 id="weekly-title">이번 주 배출 일정</h1>
+          <p className="weekly-range">{formatWeekRange(schedule.days)}</p>
+        </div>
+        <div className="today-actions">
+          <button className="secondary-button" type="button" onClick={onToday}>오늘 보기</button>
+          <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
+        </div>
+      </div>
+
+      {schedule.needsVerification.length > 0 && (
+        <div className="weekly-verification-banner" role="note" aria-label="확인 필요 품목">
+          <strong>확인 필요 품목</strong>
+          <div className="weekly-category-list">
+            {schedule.needsVerification.map((category) => (
+              <span key={category}>{CATEGORY_LABELS[category]}</span>
+            ))}
+          </div>
+          <p>공식 일정 규칙이 충돌하거나 모호한 품목은 특정 요일에 임의로 배치하지 않습니다.</p>
+        </div>
+      )}
+
+      <div className="weekly-grid" aria-label="월요일부터 일요일까지 배출 일정">
+        {schedule.days.map((day) => {
+          const parts = dateParts(day.dateKey);
+          return (
+            <article className="weekly-card" key={day.dateKey} aria-label={weeklyDayAriaLabel(day)}>
+              <div className="weekly-card-heading">
+                <strong>{WEEKDAY_SHORT[day.weekday]}</strong>
+                <span>{parts.month}.{parts.day}</span>
+              </div>
+              {day.scheduledCategories.length > 0 ? (
+                <div className="weekly-category-list">
+                  {day.scheduledCategories.map((category) => (
+                    <span key={category}>{CATEGORY_LABELS[category]}</span>
+                  ))}
+                </div>
+              ) : (
+                <span className="weekly-empty">배출 일정 없음</span>
+              )}
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -468,6 +589,15 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           region={region}
           rules={rules}
           dataSummary={dataSummary}
+          onWeekly={() => setView('weekly')}
+          onChangeRegion={() => setView('setup')}
+        />
+      )}
+      {view === 'weekly' && region && (
+        <WeeklyView
+          region={region}
+          rules={rules}
+          onToday={() => setView('today')}
           onChangeRegion={() => setView('setup')}
         />
       )}

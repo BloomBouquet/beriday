@@ -21,6 +21,11 @@
 - 선택 지역 LocalStorage 저장 및 재진입 복원
 - Today 화면에서 공식 rule 기반 `가능`/`예정`/`마감`/`불가`/`확인 필요` 상태 계산
 - rule이 없거나 ambiguous한 카테고리는 임의 판단하지 않고 `확인 필요` 처리
+- Today 화면에서 공식 출처, 데이터 기준일, 담당기관/연락처, 원본 검증 요약 표시
+- 허용된 HTTPS 공공기관 출처만 클릭 가능한 공식 링크로 노출
+- Asia/Seoul 기준 현재 주의 월요일~일요일 Weekly 일정 투영
+- Weekly에서 verified 일정만 날짜별로 표시하고 ambiguous 품목은 `확인 필요 품목`으로 별도 분리
+- Weekly에서 미수거일을 해당 날짜 일정에서 제외하고 월/연도 경계를 포함한 주차 계산 검증
 - 행정안전부 전국생활쓰레기배출정보 표준 CSV source parser
 - UTF-8 BOM, quoted comma/newline, escaped quote 처리
 - 공식 CSV 필수 헤더 및 필수 지역 키 검증
@@ -108,10 +113,12 @@ production 앱은 시작할 때 같은 origin의 `/data/official-data.json`만 �
 
 - 응답이 성공하면 `loadOfficialDataAsset()`으로 schema version과 필수 top-level shape를 검증합니다.
 - 검증된 `regions`만 지역 선택 catalog로 사용합니다.
-- 검증된 `rules`만 선택 지역의 Today 계산에 사용합니다.
+- 검증된 `rules`만 선택 지역의 Today와 Weekly 계산에 사용합니다.
 - HTTP 오류, JSON 파싱 오류, 지원하지 않는 schema version은 모두 오류 상태로 전환합니다.
 - 오류 상태에서는 테스트 fixture나 임의 지역을 fallback으로 노출하지 않습니다.
 - verified rule이 없는 카테고리는 `불가`로 단정하지 않고 `확인 필요`로 표시합니다.
+- Weekly는 Today와 별도 규칙을 만들지 않고 같은 schedule engine을 사용해 현재 서울 주차의 월요일~일요일을 계산합니다.
+- ambiguous rule은 특정 요일에 임의 배치하지 않고 주간 `확인 필요 품목`으로 분리합니다.
 
 ## 데이터 원칙
 
@@ -143,4 +150,4 @@ production 앱은 시작할 때 같은 origin의 `/data/official-data.json`만 �
 - asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
 - fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 실제 production refresh를 실행해 생성된 validation report를 검토하고, 검증 report와 출처 정보를 사용자 화면에 연결하는 작업입니다.
+다음 구현 단계는 실제 production refresh를 실행해 전국 데이터 validation report를 검토하고, 기능 측면에서는 품목 검색 화면과 대형폐기물 공식 안내 연결을 이어서 구현하는 작업입니다.
