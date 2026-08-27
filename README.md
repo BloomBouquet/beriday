@@ -96,10 +96,11 @@ $env:DATA_GO_KR_API_KEY='<공공데이터포털 인증키>'
 - API의 `totalCount`를 기준으로 필요한 모든 page를 순차 수집합니다.
 - 필수 지역 키가 비어 있는 source row는 제외하고 source validation report에 기록합니다.
 - 제외된 row가 있어도 page 진행 여부는 accepted row 수가 아니라 실제 처리한 source row 수로 판단합니다.
+- `totalCount`가 남아 있는데 빈 page가 반환되면 무한 pagination 대신 refresh를 실패 처리합니다.
 - API source row는 CSV와 동일한 canonical mapping → rule adapter → serializer 경로를 사용합니다.
 - 전체 수집·검증·bundle 생성이 성공한 뒤에만 임시 파일을 최종 output으로 교체합니다.
 - `npm run build`는 네트워크를 호출하지 않고 마지막으로 검증된 asset만 사용합니다. 공공 API 장애가 application build를 깨뜨리지 않도록 refresh와 build를 분리합니다.
-- 현재 저장소/조직에는 `DATA_GO_KR_API_KEY` secret이 설정되어 있지 않아 실제 전국 production asset 생성은 인증키 주입 전까지 실행할 수 없습니다.
+- 실제 refresh를 실행하는 환경에는 `DATA_GO_KR_API_KEY`를 secret 또는 환경변수로 주입해야 합니다.
 
 ## 브라우저 데이터 로딩
 
@@ -142,4 +143,4 @@ production 앱은 시작할 때 같은 origin의 `/data/official-data.json`만 �
 - asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
 - fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 인증키가 주입되는 즉시 실제 전국 Open API ingest를 실행해 production asset을 생성·검증하고, 검증 report와 출처 정보를 사용자 화면에 연결하는 작업입니다.
+다음 구현 단계는 실제 production refresh를 실행해 생성된 validation report를 검토하고, 검증 report와 출처 정보를 사용자 화면에 연결하는 작업입니다.
