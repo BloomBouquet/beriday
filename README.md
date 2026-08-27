@@ -24,21 +24,25 @@
 - 행정안전부 전국생활쓰레기배출정보 표준 CSV source parser
 - UTF-8 BOM, quoted comma/newline, escaped quote 처리
 - 공식 CSV 필수 헤더 및 필수 지역 키 검증
+- 공식 Open API 응답 envelope와 item 필드를 기존 source row 계약으로 변환
+- Open API `totalCount` 기준 pagination 및 전역 `sourceRow` 보존
+- Open API 필수 지역 키가 없는 source row 제외 및 validation report 누적
 - `관리구역대상지역명` 기반 사용자 선택 지역 canonical catalog 생성
 - 사용자 선택 지역과 `관리구역명` 수거권역을 별도 엔티티로 분리
 - 동일 target→collection zone 중복 source provenance 병합
 - 한 대상지역이 여러 수거권역에 매핑되면 selectable catalog에서 제외하고 ambiguous 보고
 - 공식 target-area mapping을 기존 `CollectionRule` 정규화 계층으로 연결하는 adapter
 - 공식 `+` 요일 구분자와 시작/종료 시각을 기존 parser 입력 계약으로 변환
-- 원본 CSV `sourceRow`를 rule provenance와 validation error까지 유지
+- 원본 source `sourceRow`를 rule provenance와 validation error까지 유지
 - 구체 날짜로 안전하게 표현할 수 없는 `미수거일`은 verified rule 생성을 차단
-- 공식 CSV → parser → adapter 결과를 `schemaVersion: 1` production bundle로 조합
+- CSV 또는 Open API source row → adapter 결과를 `schemaVersion: 1` production bundle로 조합
 - bundle에 source/mapping/normalization/adapter 검증 report를 함께 보존
 - Region/CollectionRule을 locale/ICU 비의존 UTF-16 코드 단위 순서로 정렬해 deterministic output 보장
 - production bundle을 2-space pretty JSON + 단일 trailing newline 형식으로 deterministic 직렬화
 - JSON asset loader에서 malformed JSON, 지원하지 않는 schema version, 필수 top-level shape를 fail-fast 검증
 - 공식 CSV 파일을 deterministic JSON asset으로 만드는 CLI build command
-- CLI 필수 인자 검증 및 CSV validation 실패 시 기존 output 보존
+- 공식 Open API를 pagination으로 수집해 production asset을 갱신하는 CLI command
+- CLI/API validation 실패 시 기존 output 보존
 - 브라우저 시작 시 `/data/official-data.json`을 read-only로 로드하고 schema v1 검증 후 지역/rule을 앱에 주입
 - 공식 asset HTTP 오류 또는 malformed JSON이면 fallback 없이 `데이터를 불러오지 못했습니다.` 상태로 fail-closed
 
@@ -56,7 +60,7 @@ GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, pr
 
 ## 공식 데이터 asset 생성
 
-먼저 공식 생활쓰레기 CSV 파일을 준비한 뒤 아래처럼 실행합니다.
+공식 생활쓰레기 CSV 파일을 직접 확보한 경우 아래 수동 경로를 사용할 수 있습니다.
 
 ```bash
 npm run build:official-data -- \
@@ -69,7 +73,33 @@ npm run build:official-data -- \
 - `--imported-at`을 명시적으로 전달해 동일 입력으로 재현 가능한 asset을 만듭니다.
 - 명령은 먼저 domain TypeScript를 빌드한 뒤 공식 CSV parser → canonical mapping → rule adapter → bundle → serializer 순서로 실행됩니다.
 - CSV/header/domain 검증이 실패하면 output 쓰기 전에 종료하므로 기존 asset을 덮어쓰지 않습니다.
-- 실제 공식 CSV 전체 ingest가 검증되기 전에는 fixture 기반 JSON을 production asset으로 사용하지 않습니다.
+- fixture 기반 JSON은 production asset으로 사용하지 않습니다.
+
+## 공식 Open API 갱신
+
+자동 갱신 경로는 공공데이터포털의 행정안전부 생활쓰레기 Open API를 직접 사용합니다. API 키는 명령행 인자로 받지 않고 환경변수로만 주입합니다.
+
+```bash
+export DATA_GO_KR_API_KEY='<공공데이터포털 인증키>'
+
+npm run refresh:official-data -- \
+  --output ./public/data/official-data.json \
+  --imported-at 2026-08-28T00:00:00.000Z
+```
+
+PowerShell에서는 다음처럼 설정할 수 있습니다.
+
+```powershell
+$env:DATA_GO_KR_API_KEY='<공공데이터포털 인증키>'
+```
+
+- API의 `totalCount`를 기준으로 필요한 모든 page를 순차 수집합니다.
+- 필수 지역 키가 비어 있는 source row는 제외하고 source validation report에 기록합니다.
+- 제외된 row가 있어도 page 진행 여부는 accepted row 수가 아니라 실제 처리한 source row 수로 판단합니다.
+- API source row는 CSV와 동일한 canonical mapping → rule adapter → serializer 경로를 사용합니다.
+- 전체 수집·검증·bundle 생성이 성공한 뒤에만 임시 파일을 최종 output으로 교체합니다.
+- `npm run build`는 네트워크를 호출하지 않고 마지막으로 검증된 asset만 사용합니다. 공공 API 장애가 application build를 깨뜨리지 않도록 refresh와 build를 분리합니다.
+- 현재 저장소/조직에는 `DATA_GO_KR_API_KEY` secret이 설정되어 있지 않아 실제 전국 production asset 생성은 인증키 주입 전까지 실행할 수 없습니다.
 
 ## 브라우저 데이터 로딩
 
@@ -95,21 +125,21 @@ production 앱은 시작할 때 같은 origin의 `/data/official-data.json`만 �
 - production official asset이 없거나 검증에 실패하면 지역/일정을 추측하지 않고 오류 상태를 표시합니다.
 - 공식 일정이 연결되기 전에는 배출 가능 여부를 추측하거나 생성하지 않습니다.
 - GPS와 상세 주소를 요청하거나 저장하지 않습니다.
-- CSV source parser는 `관리구역명`과 `관리구역대상지역명`을 별도로 보존합니다.
+- source parser는 `관리구역명`과 `관리구역대상지역명`을 별도로 보존합니다.
 - `관리구역명`은 `1권역` 같은 수거 관리권역일 수 있으므로 사용자 행정동으로 간주하지 않습니다.
 - `관리구역대상지역명`에 명시된 대상지역만 사용자 선택 지역 후보로 생성합니다.
 - 대상지역 정보가 없는 source row는 임의의 선택 지역을 생성하지 않고 unresolved로 보고합니다.
 - 같은 대상지역이 서로 다른 수거권역에 연결되면 임의로 하나를 선택하지 않고 selectable catalog에서 제외합니다.
 - 같은 대상지역→수거권역 연결이 여러 source row에 반복되면 association은 하나로 합치되 source row와 기준일 provenance는 보존합니다.
 - 공식 일정 adapter는 안전한 selectable target area에 대해서만 생활/음식물/재활용 `CollectionRule`을 생성합니다.
-- 공식 CSV의 `월+수+금` 같은 요일 표현은 기존 요일 parser가 처리할 수 있도록 구분자만 정규화합니다.
+- 공식 source의 `월+수+금` 같은 요일 표현은 기존 요일 parser가 처리할 수 있도록 구분자만 정규화합니다.
 - 시작/종료 시각은 기존 시간 parser가 검증하도록 하나의 range 문자열로 조립하며, 값이 불완전하면 rule을 생성하지 않습니다.
 - `미수거일`이 `YYYY-MM-DD` 목록이면 excluded date로 변환하지만 `명절`, `임시공휴일`처럼 현재 모델이 정확히 표현할 수 없는 의미가 포함되면 해당 source row의 rule 생성을 차단합니다.
-- schedule parsing error와 rule provenance는 adapter에서 재번호화하지 않고 공식 CSV `sourceRow`를 유지합니다.
-- production bundle은 raw CSV row를 다시 포함하지 않고 앱에 필요한 canonical Region/CollectionRule과 검증 report만 보존합니다.
-- 같은 CSV와 같은 `importedAt` 입력은 런타임 locale 설정에 관계없이 동일한 Region/CollectionRule ordering을 갖습니다.
+- schedule parsing error와 rule provenance는 adapter에서 재번호화하지 않고 원본 `sourceRow`를 유지합니다.
+- production bundle은 raw source row를 다시 포함하지 않고 앱에 필요한 canonical Region/CollectionRule과 검증 report만 보존합니다.
+- 같은 source와 같은 `importedAt` 입력은 런타임 locale 설정에 관계없이 동일한 Region/CollectionRule ordering을 갖습니다.
 - asset serializer는 동일 bundle 입력에 동일한 JSON text를 만들고 파일 diff가 안정적이도록 정확히 하나의 trailing newline을 붙입니다.
 - asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
-- 실제 공식 CSV 전체 ingest가 성공하기 전에는 테스트 fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
+- fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 실제 전국 공식 CSV 전체 ingest를 수행해 production asset을 생성·검증하고, 검증 report와 출처 정보를 사용자 화면에 연결하는 작업입니다.
+다음 구현 단계는 인증키가 주입되는 즉시 실제 전국 Open API ingest를 실행해 production asset을 생성·검증하고, 검증 report와 출처 정보를 사용자 화면에 연결하는 작업입니다.
