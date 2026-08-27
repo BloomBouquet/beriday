@@ -52,6 +52,14 @@ const testRules = [
   },
 ];
 
+function selectTestRegion() {
+  fireEvent.click(screen.getByRole('button', { name: '지역 설정하기' }));
+  fireEvent.change(screen.getByLabelText('시/도'), { target: { value: '광주광역시' } });
+  fireEvent.change(screen.getByLabelText('시/군/구'), { target: { value: '북구' } });
+  fireEvent.change(screen.getByLabelText('관리구역'), { target: { value: '테스트동' } });
+  fireEvent.click(screen.getByRole('button', { name: '이 지역으로 시작하기' }));
+}
+
 describe('Beriday app shell', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -72,13 +80,7 @@ describe('Beriday app shell', () => {
   it('lets a user choose a region, saves it locally, and enters Today', () => {
     render(<App regions={testRegions} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '지역 설정하기' }));
-    expect(screen.getByRole('heading', { name: '지역을 선택하세요' })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('시/도'), { target: { value: '광주광역시' } });
-    fireEvent.change(screen.getByLabelText('시/군/구'), { target: { value: '북구' } });
-    fireEvent.change(screen.getByLabelText('관리구역'), { target: { value: '테스트동' } });
-    fireEvent.click(screen.getByRole('button', { name: '이 지역으로 시작하기' }));
+    selectTestRegion();
 
     expect(screen.getByRole('heading', { name: '오늘의 배출' })).toBeInTheDocument();
     expect(screen.getByText('광주광역시 북구 테스트동')).toBeInTheDocument();
@@ -109,17 +111,13 @@ describe('Beriday app shell', () => {
     expect(screen.queryByRole('option', { name: '테스트동' })).not.toBeInTheDocument();
   });
 
-  it('evaluates verified Today rules and marks ambiguous or missing categories as 확인 필요', () => {
+  it('evaluates verified Today rules and explains ambiguous or missing categories', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-28T11:00:00.000Z'));
 
     render(<App regions={[testRegions[0]]} rules={testRules} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '지역 설정하기' }));
-    fireEvent.change(screen.getByLabelText('시/도'), { target: { value: '광주광역시' } });
-    fireEvent.change(screen.getByLabelText('시/군/구'), { target: { value: '북구' } });
-    fireEvent.change(screen.getByLabelText('관리구역'), { target: { value: '테스트동' } });
-    fireEvent.click(screen.getByRole('button', { name: '이 지역으로 시작하기' }));
+    selectTestRegion();
 
     const generalCard = screen.getByText('일반쓰레기').closest('article');
     const foodCard = screen.getByText('음식물').closest('article');
@@ -132,6 +130,32 @@ describe('Beriday app shell', () => {
     expect(within(generalCard!).getByText('가능')).toBeInTheDocument();
     expect(within(generalCard!).getByText('19:00~23:00')).toBeInTheDocument();
     expect(within(foodCard!).getByText('확인 필요')).toBeInTheDocument();
+    expect(
+      within(foodCard!).getByText('공식 데이터의 일정 규칙이 서로 충돌하거나 모호해 자동 판단하지 않습니다.'),
+    ).toBeInTheDocument();
     expect(within(recyclingCard!).getByText('확인 필요')).toBeInTheDocument();
+    expect(
+      within(recyclingCard!).getByText('검증된 일정 규칙이 없어 자동 판단하지 않습니다.'),
+    ).toBeInTheDocument();
+  });
+
+  it('does not render an untrusted provenance URL as a clickable source link', () => {
+    const unsafeRules = [
+      {
+        ...testRules[0],
+        provenance: {
+          ...provenance,
+          sourceName: '검증되지 않은 출처',
+          sourceUrl: 'https://data.go.kr.evil.example/rule',
+        },
+      },
+    ];
+
+    render(<App regions={[testRegions[0]]} rules={unsafeRules} />);
+
+    selectTestRegion();
+
+    expect(screen.getByText('검증되지 않은 출처')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '검증되지 않은 출처' })).not.toBeInTheDocument();
   });
 });
