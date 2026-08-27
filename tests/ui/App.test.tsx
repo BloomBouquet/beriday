@@ -109,7 +109,7 @@ describe('Beriday app shell', () => {
     expect(screen.queryByRole('option', { name: '테스트동' })).not.toBeInTheDocument();
   });
 
-  it('evaluates verified Today rules and marks ambiguous or missing categories as 확인 필요', () => {
+  it('evaluates verified Today rules and explains ambiguous or missing categories', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-28T11:00:00.000Z'));
 
@@ -132,6 +132,12 @@ describe('Beriday app shell', () => {
     expect(within(generalCard!).getByText('가능')).toBeInTheDocument();
     expect(within(generalCard!).getByText('19:00~23:00')).toBeInTheDocument();
     expect(within(foodCard!).getByText('확인 필요')).toBeInTheDocument();
+    expect(
+      within(foodCard!).getByText('공식 데이터의 일정 규칙이 서로 충돌하거나 모호해 자동 판단하지 않습니다.'),
+    ).toBeInTheDocument();
     expect(within(recyclingCard!).getByText('확인 필요')).toBeInTheDocument();
+    expect(
+      within(recyclingCard!).getByText('검증된 일정 규칙이 없어 자동 판단하지 않습니다.'),
+    ).toBeInTheDocument();
   });
 });
