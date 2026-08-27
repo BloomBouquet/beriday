@@ -52,6 +52,21 @@ const testRules = [
   },
 ];
 
+const weeklyRules = [
+  ...testRules,
+  {
+    id: 'recycling-monday-rule',
+    regionId: '광주광역시/북구/테스트동',
+    category: 'recycling' as const,
+    weekdays: [1],
+    timeWindows: [{ start: '08:00', end: '10:00' }],
+    excludedDates: [],
+    instructions: ['분리배출'],
+    confidence: 'verified' as const,
+    provenance,
+  },
+];
+
 function selectTestRegion() {
   fireEvent.click(screen.getByRole('button', { name: '지역 설정하기' }));
   fireEvent.change(screen.getByLabelText('시/도'), { target: { value: '광주광역시' } });
@@ -137,6 +152,33 @@ describe('Beriday app shell', () => {
     expect(
       within(recyclingCard!).getByText('검증된 일정 규칙이 없어 자동 판단하지 않습니다.'),
     ).toBeInTheDocument();
+  });
+
+  it('navigates to the current Seoul Monday-Sunday Weekly schedule and back to Today', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-28T11:00:00.000Z'));
+
+    render(<App regions={[testRegions[0]]} rules={weeklyRules} />);
+
+    selectTestRegion();
+    fireEvent.click(screen.getByRole('button', { name: '주간 일정 보기' }));
+
+    expect(screen.getByRole('heading', { name: '이번 주 배출 일정' })).toBeInTheDocument();
+    expect(screen.getByText('8.24 ~ 8.30')).toBeInTheDocument();
+
+    const monday = screen.getByRole('article', { name: '월요일 8월 24일' });
+    const tuesday = screen.getByRole('article', { name: '화요일 8월 25일' });
+    const friday = screen.getByRole('article', { name: '금요일 8월 28일' });
+
+    expect(within(monday).getByText('재활용')).toBeInTheDocument();
+    expect(within(tuesday).getByText('배출 일정 없음')).toBeInTheDocument();
+    expect(within(friday).getByText('일반쓰레기')).toBeInTheDocument();
+
+    const verificationBanner = screen.getByRole('note', { name: '확인 필요 품목' });
+    expect(within(verificationBanner).getByText('음식물')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '오늘 보기' }));
+    expect(screen.getByRole('heading', { name: '오늘의 배출' })).toBeInTheDocument();
   });
 
   it('does not render an untrusted provenance URL as a clickable source link', () => {
