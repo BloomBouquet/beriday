@@ -1,0 +1,124 @@
+name: Apply settings app wiring
+
+on:
+  push:
+    branches:
+      - agent/cherry-blossom/frontend/settings-ui
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cherry-blossom/frontend/settings-ui
+      - name: Wire settings into App
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/App.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+            (
+              "import { isAllowedOfficialUrl } from './security/officialUrl';\nimport { getSavedRegion, saveRegion } from './storage/savedRegion';",
+              "import { isAllowedOfficialUrl } from './security/officialUrl';\nimport { SettingsView } from './settings/SettingsView';\nimport { clearSavedRegion, getSavedRegion, saveRegion } from './storage/savedRegion';",
+            ),
+            (
+              "type View = 'home' | 'setup' | 'today' | 'weekly' | 'search' | 'bulk';",
+              "type View = 'home' | 'setup' | 'today' | 'weekly' | 'search' | 'bulk' | 'settings';",
+            ),
+            (
+              """  const completeRegionSetup = (selectedRegion: RegionOption) => {
+    saveRegion(selectedRegion.regionId, validRegionIds);
+    setRegion(selectedRegion);
+    setView('today');
+  };
+""",
+              """  const completeRegionSetup = (selectedRegion: RegionOption) => {
+    saveRegion(selectedRegion.regionId, validRegionIds);
+    setRegion(selectedRegion);
+    setView('today');
+  };
+
+  const clearLocalRegion = () => {
+    clearSavedRegion();
+    setRegion(null);
+    setView('home');
+  };
+""",
+            ),
+            (
+              """        <span className=\"source-chip\">공공데이터 기반</span>
+      </header>
+""",
+              """        <span className=\"source-chip\">공공데이터 기반</span>
+        {region && (
+          <button className=\"secondary-button\" type=\"button\" onClick={() => setView('settings')}>설정</button>
+        )}
+      </header>
+""",
+            ),
+            (
+              """      {view === 'bulk' && region && (
+        <BulkDisposalView
+          region={region}
+          rules={rules}
+          onSearch={() => setView('search')}
+          onToday={() => setView('today')}
+          onChangeRegion={() => setView('setup')}
+        />
+      )}
+    </main>
+""",
+              """      {view === 'bulk' && region && (
+        <BulkDisposalView
+          region={region}
+          rules={rules}
+          onSearch={() => setView('search')}
+          onToday={() => setView('today')}
+          onChangeRegion={() => setView('setup')}
+        />
+      )}
+      {view === 'settings' && region && (
+        <SettingsView
+          region={region}
+          rules={rules}
+          dataSummary={dataSummary}
+          onToday={() => setView('today')}
+          onChangeRegion={() => setView('setup')}
+          onClearLocalData={clearLocalRegion}
+        />
+      )}
+    </main>
+""",
+            ),
+          ]
+
+          changed = False
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+                  changed = True
+              elif new not in text:
+                  raise SystemExit(f'expected App marker not found: {old[:80]!r}')
+
+          if changed:
+              path.write_text(text, encoding='utf-8')
+          PY
+
+          if git diff --quiet; then
+            echo "No App wiring change required"
+            exit 0
+          fi
+
+          git config user.name "sunwoo162"
+          git config user.email "sunwoosunwoo4114@gmail.com"
+          git add src/App.tsx
+          git commit -m "feat: wire settings into app"
+          git push origin HEAD:agent/cherry-blossom/frontend/settings-ui
