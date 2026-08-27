@@ -1,0 +1,83 @@
+name: Apply bulk view formatting fix
+
+on:
+  push:
+    branches:
+      - agent/cherry-blossom/frontend/bulk-disposal-ui
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cherry-blossom/frontend/bulk-disposal-ui
+      - name: Format focused bulk fallback block
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/App.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+          """  const fallbackSources = uniqueProvenance(regionRules).filter(
+  (source) => source.authorityName || source.authorityContact,
+);
+""",
+          """  const fallbackSources = uniqueProvenance(regionRules).filter(
+    (source) => source.authorityName || source.authorityContact,
+  );
+""",
+          1,
+          )
+          text = text.replace(
+          """        ) : (
+<div className=\"search-result-section\">
+  {fallbackSources.length > 0 ? (
+    fallbackSources.map((source) => (
+      <div key={provenanceKey(source)}>
+        <strong>{source.authorityName ?? `${region.sigungu} 담당기관`}</strong>
+        {source.authorityContact && <span>{source.authorityContact}</span>}
+      </div>
+    ))
+  ) : (
+    <strong>{region.sigungu} 담당기관</strong>
+  )}
+  <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
+</div>
+        )}
+""",
+          """        ) : (
+          <div className=\"search-result-section\">
+            {fallbackSources.length > 0 ? (
+              fallbackSources.map((source) => (
+                <div key={provenanceKey(source)}>
+                  <strong>{source.authorityName ?? `${region.sigungu} 담당기관`}</strong>
+                  {source.authorityContact && <span>{source.authorityContact}</span>}
+                </div>
+              ))
+            ) : (
+              <strong>{region.sigungu} 담당기관</strong>
+            )}
+            <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
+          </div>
+        )}
+""",
+          1,
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          if git diff --quiet; then
+            echo "No formatting change required"
+            exit 0
+          fi
+
+          git config user.name "sunwoo162"
+          git config user.email "sunwoosunwoo4114@gmail.com"
+          git add src/App.tsx
+          git commit -m "style: format bulk disposal fallback"
+          git push origin HEAD:agent/cherry-blossom/frontend/bulk-disposal-ui
