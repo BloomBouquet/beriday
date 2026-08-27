@@ -36,6 +36,8 @@
 - Region/CollectionRule을 locale/ICU 비의존 UTF-16 코드 단위 순서로 정렬해 deterministic output 보장
 - production bundle을 2-space pretty JSON + 단일 trailing newline 형식으로 deterministic 직렬화
 - JSON asset loader에서 malformed JSON, 지원하지 않는 schema version, 필수 top-level shape를 fail-fast 검증
+- 공식 CSV 파일을 deterministic JSON asset으로 만드는 CLI build command
+- CLI 필수 인자 검증 및 CSV validation 실패 시 기존 output 보존
 
 ## 검증
 
@@ -48,6 +50,23 @@ npm run build
 ```
 
 GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, production build를 함께 검증합니다.
+
+## 공식 데이터 asset 생성
+
+먼저 공식 생활쓰레기 CSV 파일을 준비한 뒤 아래처럼 실행합니다.
+
+```bash
+npm run build:official-data -- \
+  --input ./data/raw/official.csv \
+  --output ./public/data/official-data.json \
+  --imported-at 2026-08-27T15:45:00.000Z
+```
+
+- `--input`, `--output`, `--imported-at`은 모두 필수입니다.
+- `--imported-at`을 명시적으로 전달해 동일 입력으로 재현 가능한 asset을 만듭니다.
+- 명령은 먼저 domain TypeScript를 빌드한 뒤 공식 CSV parser → canonical mapping → rule adapter → bundle → serializer 순서로 실행됩니다.
+- CSV/header/domain 검증이 실패하면 output 쓰기 전에 종료하므로 기존 asset을 덮어쓰지 않습니다.
+- 실제 공식 CSV 전체 ingest가 검증되기 전에는 fixture 기반 JSON을 production asset으로 사용하지 않습니다.
 
 ## 데이터 원칙
 
@@ -79,4 +98,4 @@ GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, pr
 - asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
 - 실제 공식 CSV 전체 ingest가 성공하기 전에는 테스트 fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 공식 CSV 파일 입력과 deterministic serializer를 묶는 build command를 추가하고, 생성된 검증 asset을 브라우저가 read-only로 로드해 지역 선택 및 Today 화면에 연결하는 작업입니다.
+다음 구현 단계는 검증된 official JSON asset을 브라우저가 read-only로 로드해 지역 선택 catalog와 Today 화면에 연결하는 작업입니다.
