@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import App, { type RegionOption } from './App';
+import App, { type DataVerificationSummary, type RegionOption } from './App';
 import { loadOfficialDataAsset } from './data/canonical/officialDataAsset';
 import type { OfficialDataBundle } from './data/canonical/officialDataBundle';
 
@@ -21,6 +21,17 @@ function toRegionOptions(bundle: OfficialDataBundle): RegionOption[] {
     sigungu: region.sigungu,
     areaName: region.areaName,
   }));
+}
+
+function toDataVerificationSummary(bundle: OfficialDataBundle): DataVerificationSummary {
+  const source = bundle.reports?.source;
+
+  return {
+    importedAt: bundle.importedAt,
+    totalRows: typeof source?.totalRows === 'number' ? source.totalRows : null,
+    acceptedRows: typeof source?.acceptedRows === 'number' ? source.acceptedRows : null,
+    rejectedRows: typeof source?.rejectedRows === 'number' ? source.rejectedRows : null,
+  };
 }
 
 function DataStateView({ title, message }: { title: string; message: string }) {
@@ -89,5 +100,11 @@ export default function OfficialDataApp({ dataUrl = DEFAULT_DATA_URL }: Official
     );
   }
 
-  return <App regions={toRegionOptions(state.bundle)} rules={state.bundle.rules} />;
+  return (
+    <App
+      regions={toRegionOptions(state.bundle)}
+      rules={state.bundle.rules}
+      dataSummary={toDataVerificationSummary(state.bundle)}
+    />
+  );
 }
