@@ -156,3 +156,29 @@ test('fetches all official Open API pages by processed rows even when some sourc
     ],
   });
 });
+
+test('fails fast when the Open API returns an empty page before totalCount is exhausted', async () => {
+  const requestedPages = [];
+  const fetchImpl = async (url) => {
+    const requestUrl = new URL(url);
+    const pageNo = Number(requestUrl.searchParams.get('pageNo'));
+    requestedPages.push(pageNo);
+
+    return {
+      ok: true,
+      status: 200,
+      json: async () => apiPage({ pageNo, numOfRows: 2, totalCount: 3, items: [] }),
+    };
+  };
+
+  await assert.rejects(
+    fetchOfficialHouseholdWasteApiRows({
+      serviceKey: 'test-key',
+      pageSize: 2,
+      fetchImpl,
+    }),
+    /Official Open API returned an empty page before totalCount was exhausted/,
+  );
+
+  assert.deepEqual(requestedPages, [1]);
+});
