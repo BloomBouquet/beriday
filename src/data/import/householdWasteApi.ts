@@ -179,6 +179,9 @@ export async function fetchOfficialHouseholdWasteApiRows({
     if (pageNo > 1 && page.totalCount !== totalCount) {
       throw new Error('Official Open API totalCount changed during pagination');
     }
+    if (page.sourceReport.totalRows === 0 && processedRows < page.totalCount) {
+      throw new Error('Official Open API returned an empty page before totalCount was exhausted');
+    }
 
     totalCount = page.totalCount;
     processedRows += page.sourceReport.totalRows;
