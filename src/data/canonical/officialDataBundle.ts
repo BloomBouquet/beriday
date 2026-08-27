@@ -25,8 +25,12 @@ export type OfficialDataBundle = {
   reports: OfficialDataBundleReports;
 };
 
+function compareIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function sortById<T extends { id: string }>(items: readonly T[]): T[] {
-  return [...items].sort((left, right) => left.id.localeCompare(right.id, 'ko'));
+  return [...items].sort((left, right) => compareIds(left.id, right.id));
 }
 
 export function buildOfficialDataBundle(csv: string, importedAt: string): OfficialDataBundle {
