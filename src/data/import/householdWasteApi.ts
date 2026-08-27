@@ -1,5 +1,7 @@
 import type { OfficialHouseholdWasteRow } from './householdWasteCsv.js';
 
+const OFFICIAL_API_URL = 'https://apis.data.go.kr/1741000/household_waste_info/info';
+
 export type OfficialHouseholdWasteApiPage = {
   pageNo: number;
   numOfRows: number;
@@ -7,7 +9,21 @@ export type OfficialHouseholdWasteApiPage = {
   rows: OfficialHouseholdWasteRow[];
 };
 
+export type OfficialHouseholdWasteApiCollection = {
+  totalCount: number;
+  pagesFetched: number;
+  rows: OfficialHouseholdWasteRow[];
+};
+
 type JsonRecord = Record<string, unknown>;
+
+type FetchResponseLike = {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+};
+
+type FetchLike = (url: string) => Promise<FetchResponseLike>;
 
 function asRecord(value: unknown, label: string): JsonRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -82,4 +98,53 @@ export function parseOfficialHouseholdWasteApiPage(payload: unknown): OfficialHo
   });
 
   return { pageNo, numOfRows, totalCount, rows };
+}
+
+export async function fetchOfficialHouseholdWasteApiRows({
+  serviceKey,
+  pageSize = 1000,
+  fetchImpl = (url) => fetch(url),
+}: {
+  serviceKey: string;
+  pageSize?: number;
+  fetchImpl?: FetchLike;
+}): Promise<OfficialHouseholdWasteApiCollection> {
+  if (!serviceKey.trim()) {
+    throw new Error('DATA_GO_KR_API_KEY is required');
+  }
+  if (!Number.isInteger(pageSize) || pageSize <= 0) {
+    throw new Error('Official Open API pageSize must be a positive integer');
+  }
+
+  const rows: OfficialHouseholdWasteRow[] = [];
+  let pageNo = 1;
+  let totalCount = 0;
+
+  do {
+    const url = new URL(OFFICIAL_API_URL);
+    url.searchParams.set('serviceKey', serviceKey);
+    url.searchParams.set('pageNo', String(pageNo));
+    url.searchParams.set('numOfRows', String(pageSize));
+    url.searchParams.set('returnType', 'json');
+
+    const response = await fetchImpl(url.toString());
+    if (!response.ok) {
+      throw new Error(`Official Open API request failed with HTTP ${response.status}`);
+    }
+
+    const page = parseOfficialHouseholdWasteApiPage(await response.json());
+    if (page.pageNo !== pageNo) {
+      throw new Error(`Official Open API returned page ${page.pageNo} while requesting page ${pageNo}`);
+    }
+
+    totalCount = page.totalCount;
+    rows.push(...page.rows);
+    pageNo += 1;
+  } while (rows.length < totalCount);
+
+  return {
+    totalCount,
+    pagesFetched: pageNo - 1,
+    rows,
+  };
 }
