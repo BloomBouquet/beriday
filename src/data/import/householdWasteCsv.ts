@@ -1,4 +1,5 @@
 export type OfficialHouseholdWasteRow = {
+  sourceRow: number;
   sido: string;
   sigungu: string;
   managementAreaName: string;
@@ -182,8 +183,10 @@ function parseTargetAreaNames(raw: string): string[] {
 function toOfficialRow(
   sourceRow: readonly string[],
   indexByHeader: ReadonlyMap<string, number>,
+  sourceRowNumber: number,
 ): OfficialHouseholdWasteRow {
   return {
+    sourceRow: sourceRowNumber,
     sido: getValue(sourceRow, indexByHeader, '시도명'),
     sigungu: getValue(sourceRow, indexByHeader, '시군구명'),
     managementAreaName: getValue(sourceRow, indexByHeader, '관리구역명'),
@@ -229,7 +232,7 @@ export function parseOfficialHouseholdWasteCsv(csv: string): OfficialCsvImportRe
 
   dataRows.forEach((sourceRow, index) => {
     const sourceRowNumber = index + 1;
-    const row = toOfficialRow(sourceRow, indexByHeader);
+    const row = toOfficialRow(sourceRow, indexByHeader, sourceRowNumber);
 
     if (!row.sido || !row.sigungu || !row.managementAreaName) {
       errors.push({
