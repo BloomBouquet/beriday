@@ -15,6 +15,12 @@
 - 다음 배출일 계산
 - LocalStorage 저장 지역 검증
 - 출처가 명시된 최소 품목 검색
+- 품목 검색 화면에서 공식 배출 가이드와 선택 지역 일정을 별도 근거로 표시
+- 검색 결과가 없는 품목은 배출 방법을 임의 생성하지 않고 fail-closed 처리
+- 검증된 지자체 대형폐기물 공식 절차 registry
+- 검증된 대형폐기물 URL만 외부 링크로 제공하고 미검증 지역은 임의 링크를 생성하지 않음
+- 대형폐기물 공식 링크가 없는 지역은 일정 provenance의 서로 다른 담당기관/연락처를 임의 선택하지 않고 모두 표시
+- 대형폐기물은 정보 안내만 제공하며 신고·결제·수거 기능은 제공하지 않음
 - 공식 외부 링크 allowlist 검증
 - React/Vite 첫 방문 화면
 - 시/도 → 시/군/구 → 관리구역 지역 선택 흐름
@@ -150,4 +156,4 @@ production 앱은 시작할 때 같은 origin의 `/data/official-data.json`만 �
 - asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
 - fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 실제 production refresh를 실행해 전국 데이터 validation report를 검토하고, 기능 측면에서는 품목 검색 화면과 대형폐기물 공식 안내 연결을 이어서 구현하는 작업입니다.
+다음 구현 단계는 실제 production refresh를 실행해 전국 데이터 validation report를 검토하고, Settings 화면과 production 배포 검증을 이어서 진행하는 작업입니다.
