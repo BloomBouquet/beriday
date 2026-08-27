@@ -181,6 +181,31 @@ describe('Beriday app shell', () => {
     expect(screen.getByRole('heading', { name: '오늘의 배출' })).toBeInTheDocument();
   });
 
+  it('searches disposal guidance and keeps the item source separate from the selected regional schedule', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-28T11:00:00.000Z'));
+
+    render(<App regions={[testRegions[0]]} rules={weeklyRules} />);
+
+    selectTestRegion();
+    fireEvent.click(screen.getByRole('button', { name: '품목 검색' }));
+
+    expect(screen.getByRole('heading', { name: '어떻게 버릴까요?' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('searchbox', { name: '버릴 품목 검색' }), {
+      target: { value: '스티로폼' },
+    });
+
+    const result = screen.getByRole('article', { name: '스티로폼 상자 검색 결과' });
+    expect(within(result).getByText('재활용')).toBeInTheDocument();
+    expect(within(result).getByText('상자에 붙은 테이프와 택배 스티커를 제거한다.')).toBeInTheDocument();
+    expect(within(result).getByRole('link', { name: '기후에너지환경부 분리배출 가이드' })).toBeInTheDocument();
+
+    const regionalSchedule = within(result).getByRole('group', { name: '선택 지역 일정' });
+    expect(within(regionalSchedule).getByText('불가')).toBeInTheDocument();
+    expect(within(regionalSchedule).getByText(/다음 일정/)).toBeInTheDocument();
+    expect(within(regionalSchedule).getByText('광주광역시 북구 테스트동')).toBeInTheDocument();
+  });
+
   it('does not render an untrusted provenance URL as a clickable source link', () => {
     const unsafeRules = [
       {
