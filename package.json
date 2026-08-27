@@ -10,6 +10,7 @@
     "typecheck:domain": "tsc -p tsconfig.json --noEmit",
     "typecheck:app": "tsc -p tsconfig.app.json --noEmit",
     "build:domain": "tsc -p tsconfig.build.json",
+    "build:official-data": "npm run build:domain && node scripts/build-official-data.mjs",
     "test:domain": "npm run build:domain && node --test tests/unit/*.test.mjs",
     "test": "vitest run"
   },
