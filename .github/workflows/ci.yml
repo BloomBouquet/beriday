@@ -17,23 +17,27 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Probe official Open API access
-        env:
-          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+      - name: Inspect official API response shape via diagnostic proxy
         run: |
           set -euo pipefail
-          if [ -z "${DATA_GO_KR_API_KEY:-}" ]; then
-            echo 'DATA_GO_KR_API_KEY is not configured for this repository or organization.' >&2
-            exit 1
-          fi
           curl --fail --silent --show-error --get \
-            'https://apis.data.go.kr/1741000/household_waste_info/info' \
-            --data-urlencode "serviceKey=${DATA_GO_KR_API_KEY}" \
+            'https://k-skill-proxy.nomadamas.org/v1/household-waste/info' \
+            --data-urlencode 'cond[SGG_NM::LIKE]=강남구' \
             --data-urlencode 'pageNo=1' \
-            --data-urlencode 'numOfRows=1' \
-            --data-urlencode 'returnType=json' \
+            --data-urlencode 'numOfRows=100' \
             --output /tmp/official-api.json
-          node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('/tmp/official-api.json','utf8')); console.log(JSON.stringify({type:Array.isArray(data)?'array':typeof data,keys:data&&typeof data==='object'?Object.keys(data).slice(0,12):[]},null,2));"
+          node <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('/tmp/official-api.json', 'utf8'));
+          const rows = Array.isArray(data) ? data : (data.body?.items ?? data.items ?? data.response?.body?.items ?? []);
+          const first = Array.isArray(rows) ? rows[0] : null;
+          console.log(JSON.stringify({
+            rootKeys: data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : [],
+            rowCount: Array.isArray(rows) ? rows.length : null,
+            firstRowKeys: first && typeof first === 'object' ? Object.keys(first) : [],
+            sampleRegion: first ? { sido: first.CTPV_NM, sigungu: first.SGG_NM, zone: first.MNG_ZONE_NM, target: first.MNG_ZONE_TRGT_RGN_NM } : null,
+          }, null, 2));
+          NODE
       - name: Domain tests
         run: npm run test:domain
       - name: UI tests when configured
