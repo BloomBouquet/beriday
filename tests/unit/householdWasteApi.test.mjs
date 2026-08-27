@@ -164,6 +164,10 @@ test('fails fast when the Open API returns an empty page before totalCount is ex
     const pageNo = Number(requestUrl.searchParams.get('pageNo'));
     requestedPages.push(pageNo);
 
+    if (pageNo > 1) {
+      throw new Error('unexpected extra page request');
+    }
+
     return {
       ok: true,
       status: 200,
