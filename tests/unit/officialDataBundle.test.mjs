@@ -68,13 +68,28 @@ test('builds a versioned deterministic bundle from official CSV through parser a
   assert.equal(first.rules.length, 6);
   assert.deepEqual(
     first.rules.map((rule) => rule.id),
-    [...first.rules.map((rule) => rule.id)].sort((a, b) => a.localeCompare(b, 'ko')),
+    [...first.rules.map((rule) => rule.id)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
   );
   assert.equal(first.reports.source.totalRows, 1);
   assert.equal(first.reports.source.acceptedRows, 1);
   assert.equal(first.reports.mapping.selectableRegions, 2);
   assert.equal(first.reports.adapter.skippedSourceRows, 0);
   assert.equal(first.reports.normalization.errors.length, 0);
+});
+
+test('orders bundle ids by locale-independent UTF-16 code units', () => {
+  const csv = `${headers}\n${validRow({ targetAreas: '가동+A동' })}`;
+
+  const bundle = buildOfficialDataBundle(csv, importedAt);
+
+  assert.deepEqual(
+    bundle.regions.map((region) => region.id),
+    ['광주광역시/북구/A동', '광주광역시/북구/가동'],
+  );
+  assert.deepEqual(
+    bundle.rules.map((rule) => rule.id),
+    [...bundle.rules.map((rule) => rule.id)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
 });
 
 test('keeps source parser rejection counts while adapting only accepted rows', () => {
