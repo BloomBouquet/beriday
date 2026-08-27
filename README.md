@@ -4,7 +4,7 @@
 
 ## 현재 구현 상태
 
-이 작업공간에는 네트워크 의존성 없이 검증 가능한 핵심 도메인 계층이 구현되어 있습니다.
+핵심 도메인 계층과 React/Vite 웹 앱 기반이 구현되어 있습니다.
 
 - 한국어 요일/시간 파서
 - 지역 및 생활/음식물/재활용 규칙 정규화
@@ -16,16 +16,31 @@
 - LocalStorage 저장 지역 검증
 - 출처가 명시된 최소 품목 검색
 - 공식 외부 링크 allowlist 검증
+- React/Vite 첫 방문 화면
+- 시/도 → 시/군/구 → 관리구역 지역 선택 흐름
+- 선택 지역 LocalStorage 저장 및 재진입 복원
+- Today 화면 진입 상태
 
 ## 검증
 
 ```bash
-npm run typecheck
+npm install
 npm run test:domain
+npm test
+npm run typecheck
+npm run build
 ```
 
-현재 실행 환경은 npm registry 접근이 차단되어 React/Vite/Vitest/Playwright 의존성을 설치할 수 없습니다. UI scaffold와 브라우저 E2E는 온라인 개발 환경에서 계획 문서의 Task 1/6/7/9를 이어서 실행해야 합니다.
+GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, production build를 함께 검증합니다.
 
 ## 데이터 원칙
 
-실제 production 일정은 행정안전부 생활쓰레기배출정보의 원본을 정규화한 뒤 사용합니다. `data/fixtures`는 테스트용 예시 데이터이며 실제 지자체 배출 규칙으로 사용하면 안 됩니다.
+실제 production 일정은 행정안전부 생활쓰레기배출정보의 원본을 정규화하고 검증한 뒤 사용합니다.
+
+- `data/fixtures`는 테스트 전용이며 실제 지자체 배출 규칙으로 사용하지 않습니다.
+- production 앱에는 테스트용 지역 catalog를 기본으로 포함하지 않습니다.
+- 공식 지역 catalog가 연결되지 않은 상태에서는 지역 선택 화면에 `지역 데이터 준비 중`을 표시합니다.
+- 공식 일정이 연결되기 전에는 배출 가능 여부를 추측하거나 생성하지 않습니다.
+- GPS와 상세 주소를 요청하거나 저장하지 않습니다.
+
+다음 구현 단계는 공식 생활쓰레기 원본을 canonical region/rule 데이터로 변환하는 importer와 그 결과를 지역 선택 및 Today 화면에 연결하는 작업입니다.

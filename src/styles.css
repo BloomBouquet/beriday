@@ -17,11 +17,17 @@ body {
     #f7f7f2;
 }
 
-button, a { font: inherit; }
+button, a, select { font: inherit; }
 
-button:focus-visible, a:focus-visible {
+button:focus-visible, a:focus-visible, select:focus-visible {
   outline: 3px solid #1d211c;
   outline-offset: 4px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  box-shadow: none;
 }
 
 .app-shell {
@@ -109,19 +115,28 @@ h1 {
   margin-top: 36px;
 }
 
-.primary-button {
+.primary-button,
+.secondary-button {
   min-height: 54px;
   padding: 0 24px;
   border: 1px solid #1d211c;
   border-radius: 14px;
-  background: #1d211c;
-  color: #fff;
   font-weight: 800;
   cursor: pointer;
+}
+
+.primary-button {
+  background: #1d211c;
+  color: #fff;
   box-shadow: 5px 5px 0 #d8f35a;
 }
 
-.primary-button:hover { transform: translate(-1px, -1px); }
+.primary-button:hover:not(:disabled) { transform: translate(-1px, -1px); }
+
+.secondary-button {
+  background: #fff;
+  color: #1d211c;
+}
 
 .privacy-note {
   color: #747970;
@@ -210,13 +225,126 @@ h1 {
 .feature-grid h2 { margin: 42px 0 8px; font-size: 20px; letter-spacing: -0.035em; }
 .feature-grid p { margin: 0; color: #686e64; font-size: 14px; line-height: 1.65; word-break: keep-all; }
 
+.setup-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+  gap: clamp(44px, 8vw, 110px);
+  align-items: start;
+  padding: clamp(72px, 10vw, 124px) 0;
+}
+
+.setup-copy h1,
+.today-header h1 {
+  font-size: clamp(44px, 6vw, 76px);
+}
+
+.region-form {
+  display: grid;
+  gap: 18px;
+  padding: 26px;
+  border: 1px solid #1d211c;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 10px 12px 0 rgba(29, 33, 28, 0.1);
+}
+
+.region-form label {
+  display: grid;
+  gap: 8px;
+  color: #5d6359;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.region-form select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid #cdd1c7;
+  border-radius: 14px;
+  background: #fff;
+  color: #1d211c;
+}
+
+.region-form select:disabled {
+  background: #f0f1ec;
+  color: #92978f;
+}
+
+.fixture-note {
+  margin: 2px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff4d8;
+  color: #71591f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.today-page {
+  padding: clamp(72px, 9vw, 110px) 0;
+}
+
+.today-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.region-name {
+  margin: 0 0 14px;
+  color: #5d6359;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.sample-banner {
+  display: grid;
+  gap: 6px;
+  margin-top: 36px;
+  padding: 18px 20px;
+  border: 1px solid #d7bd78;
+  border-radius: 16px;
+  background: #fff4d8;
+}
+
+.sample-banner span {
+  color: #71591f;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.today-card {
+  display: grid;
+  gap: 12px;
+  min-height: 190px;
+  padding: 22px;
+  border: 1px solid #d8dbd3;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.today-card strong { font-size: 20px; }
+.today-card > span:last-child { color: #747970; font-size: 14px; }
+
 @media (max-width: 820px) {
   .app-shell { width: min(100% - 28px, 680px); padding-top: 18px; }
   .hero { grid-template-columns: 1fr; padding-top: 72px; gap: 52px; }
   .today-preview { max-width: 560px; }
-  .feature-grid { grid-template-columns: 1fr; }
+  .feature-grid,
+  .today-grid { grid-template-columns: 1fr; }
   .feature-grid article { min-height: 150px; }
   .feature-grid h2 { margin-top: 26px; }
+  .setup-panel { grid-template-columns: 1fr; padding-top: 72px; }
+  .today-header { flex-direction: column; }
 }
 
 @media (max-width: 480px) {
@@ -224,6 +352,8 @@ h1 {
   h1 { font-size: clamp(42px, 14vw, 62px); }
   .hero-description { font-size: 15px; }
   .hero-actions { align-items: flex-start; flex-direction: column; }
-  .primary-button { width: 100%; }
+  .primary-button,
+  .secondary-button { width: 100%; }
   .today-preview { padding: 20px; border-radius: 22px; }
+  .region-form { padding: 20px; border-radius: 22px; }
 }
