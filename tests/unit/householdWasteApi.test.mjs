@@ -5,7 +5,7 @@ import {
   parseOfficialHouseholdWasteApiPage,
 } from '../../dist-tests/src/data/import/householdWasteApi.js';
 
-function apiItem(targetAreaName) {
+function apiItem(targetAreaName, overrides = {}) {
   return {
     CTPV_NM: '광주광역시',
     SGG_NM: '북구',
@@ -27,6 +27,7 @@ function apiItem(targetAreaName) {
     MNG_DEPT_NM: '청소행정과',
     MNG_DEPT_TELNO: '062-000-0000',
     DAT_CRTR_YMD: '2026-08-25',
+    ...overrides,
   };
 }
 
@@ -80,7 +81,35 @@ test('adapts one official Open API item to the existing household-waste row cont
   ]);
 });
 
-test('fetches all official Open API pages from totalCount without duplicating source row numbers', async () => {
+test('rejects API items with missing required region keys while preserving original source row numbers', () => {
+  const result = parseOfficialHouseholdWasteApiPage(
+    apiPage({
+      pageNo: 1,
+      numOfRows: 2,
+      totalCount: 2,
+      items: [
+        apiItem('잘못된동', { SGG_NM: '' }),
+        apiItem('일곡동'),
+      ],
+    }),
+  );
+
+  assert.deepEqual(result.rows.map((row) => row.sourceRow), [2]);
+  assert.deepEqual(result.sourceReport, {
+    totalRows: 2,
+    acceptedRows: 1,
+    rejectedRows: 1,
+    errors: [
+      {
+        row: 1,
+        code: 'missing-region-key',
+        message: 'Missing 시도명, 시군구명, or 관리구역명',
+      },
+    ],
+  });
+});
+
+test('fetches all official Open API pages by processed rows even when some source rows are rejected', async () => {
   const requestedPages = [];
   const fetchImpl = async (url) => {
     const requestUrl = new URL(url);
@@ -88,7 +117,12 @@ test('fetches all official Open API pages from totalCount without duplicating so
     requestedPages.push(pageNo);
 
     const payload = pageNo === 1
-      ? apiPage({ pageNo: 1, numOfRows: 2, totalCount: 3, items: [apiItem('일곡동'), apiItem('매곡동')] })
+      ? apiPage({
+          pageNo: 1,
+          numOfRows: 2,
+          totalCount: 3,
+          items: [apiItem('잘못된동', { SGG_NM: '' }), apiItem('매곡동')],
+        })
       : apiPage({ pageNo: 2, numOfRows: 2, totalCount: 3, items: [apiItem('운암동')] });
 
     return {
@@ -107,6 +141,18 @@ test('fetches all official Open API pages from totalCount without duplicating so
   assert.deepEqual(requestedPages, [1, 2]);
   assert.equal(result.totalCount, 3);
   assert.equal(result.pagesFetched, 2);
-  assert.deepEqual(result.rows.map((row) => row.sourceRow), [1, 2, 3]);
-  assert.deepEqual(result.rows.map((row) => row.targetAreaNames[0]), ['일곡동', '매곡동', '운암동']);
+  assert.deepEqual(result.rows.map((row) => row.sourceRow), [2, 3]);
+  assert.deepEqual(result.rows.map((row) => row.targetAreaNames[0]), ['매곡동', '운암동']);
+  assert.deepEqual(result.sourceReport, {
+    totalRows: 3,
+    acceptedRows: 2,
+    rejectedRows: 1,
+    errors: [
+      {
+        row: 1,
+        code: 'missing-region-key',
+        message: 'Missing 시도명, 시군구명, or 관리구역명',
+      },
+    ],
+  });
 });
