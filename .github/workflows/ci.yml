@@ -17,7 +17,7 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Inspect official API response shape via diagnostic proxy
+      - name: Inspect official API envelope via diagnostic proxy
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --get \
@@ -29,13 +29,22 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const data = JSON.parse(fs.readFileSync('/tmp/official-api.json', 'utf8'));
-          const rows = Array.isArray(data) ? data : (data.body?.items ?? data.items ?? data.response?.body?.items ?? []);
-          const first = Array.isArray(rows) ? rows[0] : null;
+          const response = data?.response;
+          const body = response?.body;
+          const items = body?.items;
+          const describe = (value) => ({
+            type: Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value,
+            keys: value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value).slice(0, 30) : [],
+            length: Array.isArray(value) ? value.length : null,
+          });
+          const itemCandidate = Array.isArray(items) ? items[0] : Array.isArray(items?.item) ? items.item[0] : null;
           console.log(JSON.stringify({
-            rootKeys: data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : [],
-            rowCount: Array.isArray(rows) ? rows.length : null,
-            firstRowKeys: first && typeof first === 'object' ? Object.keys(first) : [],
-            sampleRegion: first ? { sido: first.CTPV_NM, sigungu: first.SGG_NM, zone: first.MNG_ZONE_NM, target: first.MNG_ZONE_TRGT_RGN_NM } : null,
+            response: describe(response),
+            responseHeader: describe(response?.header),
+            responseBody: describe(body),
+            bodyItems: describe(items),
+            bodyItemsItem: describe(items?.item),
+            firstItemKeys: itemCandidate && typeof itemCandidate === 'object' ? Object.keys(itemCandidate).slice(0, 60) : [],
           }, null, 2));
           NODE
       - name: Domain tests
