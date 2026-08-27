@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { evaluateSchedule, type ScheduleResult, type ScheduleStatus } from './domain/schedule/evaluateSchedule';
 import type { CollectionRule, RuleProvenance, TimeWindow, WasteCategory } from './domain/waste/types';
+import { isAllowedOfficialUrl } from './security/officialUrl';
 import { getSavedRegion, saveRegion } from './storage/savedRegion';
 
 export type RegionOption = {
@@ -107,6 +108,16 @@ function uniqueProvenance(rules: readonly CollectionRule[]): RuleProvenance[] {
   }
 
   return [...byKey.values()];
+}
+
+function provenanceKey(source: RuleProvenance): string {
+  return [
+    source.sourceId,
+    source.sourceUrl,
+    source.sourceUpdatedAt ?? '',
+    source.authorityName ?? '',
+    source.authorityContact ?? '',
+  ].join('|');
 }
 
 function getVerificationReason(result: ScheduleResult | null): string | null {
@@ -288,10 +299,12 @@ function DataTrustPanel({
   dataSummary: DataVerificationSummary | null;
 }) {
   const provenance = uniqueProvenance(rules);
-  const hasValidationCounts =
-    dataSummary?.totalRows !== null &&
-    dataSummary?.acceptedRows !== null &&
-    dataSummary?.rejectedRows !== null;
+  const hasValidationCounts = Boolean(
+    dataSummary &&
+    dataSummary.totalRows !== null &&
+    dataSummary.acceptedRows !== null &&
+    dataSummary.rejectedRows !== null,
+  );
 
   if (provenance.length === 0 && !dataSummary) return null;
 
@@ -306,21 +319,29 @@ function DataTrustPanel({
       </div>
 
       <div className="data-trust-grid">
-        {provenance.map((source) => (
-          <article className="data-source-card" key={`${source.sourceId}-${source.sourceUpdatedAt ?? 'unknown'}-${source.authorityName ?? 'unknown'}`}>
-            <span className="data-card-label">공식 출처</span>
-            <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">
-              {source.sourceName}
-            </a>
-            {source.sourceUpdatedAt && <span>데이터 기준일 {source.sourceUpdatedAt}</span>}
-            {(source.authorityName || source.authorityContact) && (
-              <span>
-                담당기관 {source.authorityName ?? '기관명 미제공'}
-                {source.authorityContact ? ` · ${source.authorityContact}` : ''}
-              </span>
-            )}
-          </article>
-        ))}
+        {provenance.map((source) => {
+          const isTrustedLink = isAllowedOfficialUrl(source.sourceUrl);
+
+          return (
+            <article className="data-source-card" key={provenanceKey(source)}>
+              <span className="data-card-label">공식 출처</span>
+              {isTrustedLink ? (
+                <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">
+                  {source.sourceName}
+                </a>
+              ) : (
+                <strong>{source.sourceName}</strong>
+              )}
+              {source.sourceUpdatedAt && <span>데이터 기준일 {source.sourceUpdatedAt}</span>}
+              {(source.authorityName || source.authorityContact) && (
+                <span>
+                  담당기관 {source.authorityName ?? '기관명 미제공'}
+                  {source.authorityContact ? ` · ${source.authorityContact}` : ''}
+                </span>
+              )}
+            </article>
+          );
+        })}
 
         {dataSummary && (
           <article className="data-source-card">
