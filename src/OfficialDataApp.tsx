@@ -89,5 +89,5 @@ export default function OfficialDataApp({ dataUrl = DEFAULT_DATA_URL }: Official
     );
   }
 
-  return <App regions={toRegionOptions(state.bundle)} />;
+  return <App regions={toRegionOptions(state.bundle)} rules={state.bundle.rules} />;
 }
