@@ -77,3 +77,31 @@ test('fails with a concise usage error when required arguments are missing', asy
     },
   );
 });
+
+test('preserves an existing output asset when official CSV validation fails', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'beriday-build-cli-invalid-'));
+  const input = path.join(dir, 'invalid.csv');
+  const output = path.join(dir, 'official-data.json');
+  const previous = '{"previous":true}\n';
+
+  try {
+    await writeFile(input, '시도명,시군구명\n광주광역시,북구', 'utf8');
+    await writeFile(output, previous, 'utf8');
+
+    await assert.rejects(
+      runCli([
+        '--input', input,
+        '--output', output,
+        '--imported-at', '2026-08-27T15:45:00.000Z',
+      ]),
+      (error) => {
+        assert.match(error.stderr, /Missing required official CSV headers/);
+        return true;
+      },
+    );
+
+    assert.equal(await readFile(output, 'utf8'), previous);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
