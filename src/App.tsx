@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { evaluateSchedule, type ScheduleResult, type ScheduleStatus } from './domain/schedule/evaluateSchedule';
-import type { CollectionRule, TimeWindow, WasteCategory } from './domain/waste/types';
+import type { CollectionRule, RuleProvenance, TimeWindow, WasteCategory } from './domain/waste/types';
 import { getSavedRegion, saveRegion } from './storage/savedRegion';
 
 export type RegionOption = {
@@ -10,9 +10,17 @@ export type RegionOption = {
   areaName: string;
 };
 
+export type DataVerificationSummary = {
+  importedAt: string;
+  totalRows: number | null;
+  acceptedRows: number | null;
+  rejectedRows: number | null;
+};
+
 type AppProps = {
   regions?: readonly RegionOption[];
   rules?: readonly CollectionRule[];
+  dataSummary?: DataVerificationSummary | null;
 };
 
 type View = 'home' | 'setup' | 'today';
@@ -66,6 +74,39 @@ function formatNextAvailable(value: string | null): string | null {
     minute: '2-digit',
     hour12: false,
   }).format(date);
+}
+
+function formatImportedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+function uniqueProvenance(rules: readonly CollectionRule[]): RuleProvenance[] {
+  const byKey = new Map<string, RuleProvenance>();
+
+  for (const rule of rules) {
+    const provenance = rule.provenance;
+    const key = [
+      provenance.sourceId,
+      provenance.sourceUrl,
+      provenance.sourceUpdatedAt ?? '',
+      provenance.authorityName ?? '',
+      provenance.authorityContact ?? '',
+    ].join('|');
+    if (!byKey.has(key)) byKey.set(key, provenance);
+  }
+
+  return [...byKey.values()];
 }
 
 function HomeView({ onStart }: { onStart: () => void }) {
@@ -231,13 +272,76 @@ function RegionSetupView({
   );
 }
 
+function DataTrustPanel({
+  rules,
+  dataSummary,
+}: {
+  rules: readonly CollectionRule[];
+  dataSummary: DataVerificationSummary | null;
+}) {
+  const provenance = uniqueProvenance(rules);
+  const hasValidationCounts =
+    dataSummary?.totalRows !== null &&
+    dataSummary?.acceptedRows !== null &&
+    dataSummary?.rejectedRows !== null;
+
+  if (provenance.length === 0 && !dataSummary) return null;
+
+  return (
+    <section className="data-trust-panel" aria-labelledby="data-trust-title">
+      <div className="data-trust-heading">
+        <div>
+          <p className="eyebrow">공식 데이터</p>
+          <h2 id="data-trust-title">데이터 근거</h2>
+        </div>
+        <p>오늘 일정에 사용된 출처와 전체 원본 검증 상태를 확인할 수 있습니다.</p>
+      </div>
+
+      <div className="data-trust-grid">
+        {provenance.map((source) => (
+          <article className="data-source-card" key={`${source.sourceId}-${source.sourceUpdatedAt ?? 'unknown'}-${source.authorityName ?? 'unknown'}`}>
+            <span className="data-card-label">공식 출처</span>
+            <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">
+              {source.sourceName}
+            </a>
+            {source.sourceUpdatedAt && <span>데이터 기준일 {source.sourceUpdatedAt}</span>}
+            {(source.authorityName || source.authorityContact) && (
+              <span>
+                담당기관 {source.authorityName ?? '기관명 미제공'}
+                {source.authorityContact ? ` · ${source.authorityContact}` : ''}
+              </span>
+            )}
+          </article>
+        ))}
+
+        {dataSummary && (
+          <article className="data-source-card">
+            <span className="data-card-label">전체 데이터 검증</span>
+            {hasValidationCounts && (
+              <strong>
+                원본 {dataSummary.totalRows}건 중 {dataSummary.acceptedRows}건 반영 · {dataSummary.rejectedRows}건 제외
+              </strong>
+            )}
+            <span>가져온 시각 {formatImportedAt(dataSummary.importedAt)}</span>
+            {(dataSummary.rejectedRows ?? 0) > 0 && (
+              <p>검증에서 제외된 원본 행은 배출 일정 계산에 사용하지 않습니다.</p>
+            )}
+          </article>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function TodayView({
   region,
   rules,
+  dataSummary,
   onChangeRegion,
 }: {
   region: RegionOption;
   rules: readonly CollectionRule[];
+  dataSummary: DataVerificationSummary | null;
   onChangeRegion: () => void;
 }) {
   const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
@@ -283,11 +387,13 @@ function TodayView({
           );
         })}
       </div>
+
+      <DataTrustPanel rules={regionRules} dataSummary={dataSummary} />
     </section>
   );
 }
 
-export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES }: AppProps) {
+export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, dataSummary = null }: AppProps) {
   const validRegionIds = useMemo(
     () => new Set(regions.map((region) => region.regionId)),
     [regions],
@@ -327,7 +433,12 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES }: Ap
       {view === 'home' && <HomeView onStart={() => setView('setup')} />}
       {view === 'setup' && <RegionSetupView regions={regions} onComplete={completeRegionSetup} />}
       {view === 'today' && region && (
-        <TodayView region={region} rules={rules} onChangeRegion={() => setView('setup')} />
+        <TodayView
+          region={region}
+          rules={rules}
+          dataSummary={dataSummary}
+          onChangeRegion={() => setView('setup')}
+        />
       )}
     </main>
   );
