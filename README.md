@@ -34,6 +34,8 @@
 - 공식 CSV → parser → adapter 결과를 `schemaVersion: 1` production bundle로 조합
 - bundle에 source/mapping/normalization/adapter 검증 report를 함께 보존
 - Region/CollectionRule을 locale/ICU 비의존 UTF-16 코드 단위 순서로 정렬해 deterministic output 보장
+- production bundle을 2-space pretty JSON + 단일 trailing newline 형식으로 deterministic 직렬화
+- JSON asset loader에서 malformed JSON, 지원하지 않는 schema version, 필수 top-level shape를 fail-fast 검증
 
 ## 검증
 
@@ -73,5 +75,8 @@ GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, pr
 - schedule parsing error와 rule provenance는 adapter에서 재번호화하지 않고 공식 CSV `sourceRow`를 유지합니다.
 - production bundle은 raw CSV row를 다시 포함하지 않고 앱에 필요한 canonical Region/CollectionRule과 검증 report만 보존합니다.
 - 같은 CSV와 같은 `importedAt` 입력은 런타임 locale 설정에 관계없이 동일한 Region/CollectionRule ordering을 갖습니다.
+- asset serializer는 동일 bundle 입력에 동일한 JSON text를 만들고 파일 diff가 안정적이도록 정확히 하나의 trailing newline을 붙입니다.
+- asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
+- 실제 공식 CSV 전체 ingest가 성공하기 전에는 테스트 fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 deterministic bundle을 JSON production asset으로 직렬화하는 build boundary를 만들고, 그 asset을 지역 선택 및 Today 화면에서 읽기 전용으로 소비하도록 연결하는 작업입니다.
+다음 구현 단계는 공식 CSV 파일 입력과 deterministic serializer를 묶는 build command를 추가하고, 생성된 검증 asset을 브라우저가 read-only로 로드해 지역 선택 및 Today 화면에 연결하는 작업입니다.
