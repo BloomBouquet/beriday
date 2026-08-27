@@ -14,6 +14,10 @@
 - 미수거일 우선 처리
 - 다음 배출일 계산
 - LocalStorage 저장 지역 검증
+- Settings에서 선택 지역 확인, 지역 재설정, 저장된 지역 삭제 지원
+- Settings에서 GPS·상세 주소를 저장하지 않는 개인정보 경계 명시
+- 저장된 지역 삭제 시 해당 LocalStorage 키만 제거하고 첫 방문 화면으로 복귀
+- Settings에서 선택 지역의 공식 출처, 검증 요약, 정책 변경 주의사항 표시
 - 출처가 명시된 최소 품목 검색
 - 품목 검색 화면에서 공식 배출 가이드와 선택 지역 일정을 별도 근거로 표시
 - 검색 결과가 없는 품목은 배출 방법을 임의 생성하지 않고 fail-closed 처리
@@ -156,4 +160,4 @@ production 앱은 시작할 때 같은 origin의 `/data/official-data.json`만 �
 - asset loader는 문자열만 읽으며 파일시스템/네트워크 I/O를 수행하지 않습니다.
 - fixture로 만든 JSON을 production asset처럼 커밋하지 않습니다.
 
-다음 구현 단계는 실제 production refresh를 실행해 전국 데이터 validation report를 검토하고, Settings 화면과 production 배포 검증을 이어서 진행하는 작업입니다.
+다음 구현 단계는 실제 production refresh를 실행해 전국 데이터 validation report를 검토하고 production 배포 검증을 이어서 진행하는 작업입니다.
