@@ -67,3 +67,13 @@ test('builds a deterministic schema v1 JSON asset from an explicit CSV input and
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('fails with a concise usage error when required arguments are missing', async () => {
+  await assert.rejects(
+    runCli([]),
+    (error) => {
+      assert.match(error.stderr, /Usage: node scripts\/build-official-data\.mjs --input <csv> --output <json> --imported-at <timestamp>/);
+      return true;
+    },
+  );
+});
