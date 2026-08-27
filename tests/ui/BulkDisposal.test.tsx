@@ -81,4 +81,27 @@ describe('bulk disposal guidance', () => {
     expect(screen.getByText('062-000-0000')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '공식 배출 절차 보기' })).not.toBeInTheDocument();
   });
+
+  it('shows every distinct official authority contact instead of choosing one arbitrarily', () => {
+    const secondRule = {
+      ...bukguRule,
+      id: 'bukgu-recycling',
+      category: 'recycling' as const,
+      provenance: {
+        ...bukguRule.provenance,
+        sourceId: 'official-household-waste-secondary',
+        authorityName: '북구청 자원순환과',
+        authorityContact: '062-111-1111',
+      },
+    };
+
+    render(<App regions={[bukguRegion]} rules={[bukguRule, secondRule]} />);
+
+    selectRegion(bukguRegion);
+
+    expect(screen.getByText('북구청')).toBeInTheDocument();
+    expect(screen.getByText('062-000-0000')).toBeInTheDocument();
+    expect(screen.getByText('북구청 자원순환과')).toBeInTheDocument();
+    expect(screen.getByText('062-111-1111')).toBeInTheDocument();
+  });
 });
