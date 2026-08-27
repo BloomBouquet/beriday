@@ -30,4 +30,19 @@ describe('Beriday app shell', () => {
     expect(screen.getByText('광주광역시 북구 테스트동')).toBeInTheDocument();
     expect(window.localStorage.getItem('beriday:saved-region:v1')).toContain('광주광역시/북구/테스트동');
   });
+
+  it('restores a previously saved valid region on a new app render', () => {
+    window.localStorage.setItem(
+      'beriday:saved-region:v1',
+      JSON.stringify({
+        regionId: '광주광역시/북구/테스트동',
+        savedAt: '2026-08-27T12:00:00.000Z',
+      }),
+    );
+
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: '오늘의 배출' })).toBeInTheDocument();
+    expect(screen.getByText('광주광역시 북구 테스트동')).toBeInTheDocument();
+  });
 });
