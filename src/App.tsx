@@ -109,6 +109,14 @@ function uniqueProvenance(rules: readonly CollectionRule[]): RuleProvenance[] {
   return [...byKey.values()];
 }
 
+function getVerificationReason(result: ScheduleResult | null): string | null {
+  if (!result) return '검증된 일정 규칙이 없어 자동 판단하지 않습니다.';
+  if (result.status === 'needs-verification') {
+    return '공식 데이터의 일정 규칙이 서로 충돌하거나 모호해 자동 판단하지 않습니다.';
+  }
+  return null;
+}
+
 function HomeView({ onStart }: { onStart: () => void }) {
   return (
     <>
@@ -375,6 +383,7 @@ function TodayView({
           const result = resultByCategory.get(item.category) ?? null;
           const window = result ? formatWindow(result.currentWindow) : null;
           const next = result ? formatNextAvailable(result.nextAvailableAt) : null;
+          const verificationReason = getVerificationReason(result);
 
           return (
             <article key={item.category} className="today-card">
@@ -383,6 +392,7 @@ function TodayView({
               <span>{result ? STATUS_LABELS[result.status] : '확인 필요'}</span>
               {window && <span>{window}</span>}
               {next && <span>다음 일정 {next}</span>}
+              {verificationReason && <span className="verification-reason">{verificationReason}</span>}
             </article>
           );
         })}
