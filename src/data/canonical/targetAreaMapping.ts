@@ -69,7 +69,7 @@ export function buildTargetAreaCatalog(
   let unresolvedRows = 0;
 
   rows.forEach((row, index) => {
-    const sourceRow = index + 1;
+    const sourceRow = Number.isInteger(row.sourceRow) ? row.sourceRow : index + 1;
     const managementAreaId = makeManagementAreaId(
       row.sido,
       row.sigungu,
