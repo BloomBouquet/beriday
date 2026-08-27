@@ -2,6 +2,7 @@ import { makeRegionId, parseTimeWindows, parseWeekdays } from './parse.js';
 import type { CollectionRule, Region, RuleProvenance, WasteCategory } from './types.js';
 
 export type RawWasteRow = {
+  sourceRow?: number;
   sido: string;
   sigungu: string;
   areaName: string;
@@ -59,6 +60,12 @@ function scheduleFingerprint(rule: CollectionRule): string {
   return JSON.stringify({ weekdays: rule.weekdays, timeWindows: rule.timeWindows });
 }
 
+function getSourceRowNumber(row: RawWasteRow, index: number): number {
+  return Number.isInteger(row.sourceRow) && Number(row.sourceRow) > 0
+    ? Number(row.sourceRow)
+    : index + 1;
+}
+
 export function normalizeRows(rows: RawWasteRow[], importedAt: string): {
   regions: Region[];
   rules: CollectionRule[];
@@ -71,7 +78,7 @@ export function normalizeRows(rows: RawWasteRow[], importedAt: string): {
   const rejectedSourceRows = new Set<number>();
 
   rows.forEach((row, index) => {
-    const rowNumber = index + 1;
+    const rowNumber = getSourceRowNumber(row, index);
     let regionId: string;
     try {
       regionId = makeRegionId(row.sido, row.sigungu, row.areaName);
