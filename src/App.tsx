@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { getBulkDisposalGuide } from './domain/bulk/guides';
 import { searchItems } from './domain/items/searchItems';
 import { buildWeeklySchedule, type WeeklyScheduleDay } from './domain/schedule/buildWeeklySchedule';
 import { evaluateSchedule, type ScheduleResult, type ScheduleStatus } from './domain/schedule/evaluateSchedule';
@@ -26,7 +27,7 @@ type AppProps = {
   dataSummary?: DataVerificationSummary | null;
 };
 
-type View = 'home' | 'setup' | 'today' | 'weekly' | 'search';
+type View = 'home' | 'setup' | 'today' | 'weekly' | 'search' | 'bulk';
 
 type TodayItem = {
   category: Extract<WasteCategory, 'general' | 'food' | 'recycling'>;
@@ -555,12 +556,14 @@ function WeeklyView({
 function SearchView({
   region,
   rules,
+  onBulk,
   onToday,
   onWeekly,
   onChangeRegion,
 }: {
   region: RegionOption;
   rules: readonly CollectionRule[];
+  onBulk: () => void;
   onToday: () => void;
   onWeekly: () => void;
   onChangeRegion: () => void;
@@ -581,6 +584,7 @@ function SearchView({
           <h1 id="search-title">어떻게 버릴까요?</h1>
         </div>
         <div className="today-actions">
+          <button className="secondary-button" type="button" onClick={onBulk}>대형폐기물 안내</button>
           <button className="secondary-button" type="button" onClick={onToday}>오늘 보기</button>
           <button className="secondary-button" type="button" onClick={onWeekly}>주간 일정 보기</button>
           <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
@@ -668,6 +672,94 @@ function SearchView({
   );
 }
 
+function BulkDisposalView({
+  region,
+  rules,
+  onSearch,
+  onToday,
+  onChangeRegion,
+}: {
+  region: RegionOption;
+  rules: readonly CollectionRule[];
+  onSearch: () => void;
+  onToday: () => void;
+  onChangeRegion: () => void;
+}) {
+  const guide = getBulkDisposalGuide(region.sido, region.sigungu);
+  const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
+  const fallbackSources = uniqueProvenance(regionRules).filter(
+  (source) => source.authorityName || source.authorityContact,
+);
+  const canLinkGuide = Boolean(guide && isAllowedOfficialUrl(guide.procedureUrl));
+
+  return (
+    <section className="search-page" aria-labelledby="bulk-title">
+      <div className="today-header">
+        <div>
+          <p className="eyebrow">대형폐기물 안내</p>
+          <p className="region-name">{region.sido} {region.sigungu} {region.areaName}</p>
+          <h1 id="bulk-title">대형폐기물은 공식 절차를 확인하세요</h1>
+        </div>
+        <div className="today-actions">
+          <button className="secondary-button" type="button" onClick={onSearch}>품목 검색</button>
+          <button className="secondary-button" type="button" onClick={onToday}>오늘 보기</button>
+          <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
+        </div>
+      </div>
+
+      <div className="search-result-card">
+        <div className="search-result-heading">
+          <div>
+            <span className="data-card-label">지자체 공식 절차</span>
+            <h2>{guide ? '검증된 공식 안내를 확인했습니다.' : '공식 신청 링크를 아직 검증하지 못했습니다.'}</h2>
+          </div>
+          <span className="preview-status">정보 안내만 제공</span>
+        </div>
+
+        {guide ? (
+          <>
+            <div className="search-result-section">
+              <strong>{guide.authorityName}</strong>
+              <span>{guide.departmentName}</span>
+              <span>{guide.contact}</span>
+              <span>검증일 {guide.verifiedAt}</span>
+            </div>
+            <div className="regional-schedule-card" role="group" aria-label="대형폐기물 공식 안내">
+              <span className="data-card-label">공식 안내</span>
+              <strong>{guide.sourceName}</strong>
+              {canLinkGuide ? (
+                <a href={guide.procedureUrl} target="_blank" rel="noopener noreferrer">공식 배출 절차 보기</a>
+              ) : (
+                <span>공식 URL 검증에 실패해 링크를 제공하지 않습니다.</span>
+              )}
+            </div>
+          </>
+        ) : (
+<div className="search-result-section">
+  {fallbackSources.length > 0 ? (
+    fallbackSources.map((source) => (
+      <div key={provenanceKey(source)}>
+        <strong>{source.authorityName ?? `${region.sigungu} 담당기관`}</strong>
+        {source.authorityContact && <span>{source.authorityContact}</span>}
+      </div>
+    ))
+  ) : (
+    <strong>{region.sigungu} 담당기관</strong>
+  )}
+  <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
+</div>
+        )}
+
+        <div className="search-result-source">
+          <span>서비스 범위</span>
+          <strong>버리데이에서는 신고·결제·수거를 받지 않습니다.</strong>
+          <span>실제 신청과 수수료 확인은 해당 지자체 공식 절차에서 진행하세요.</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, dataSummary = null }: AppProps) {
   const validRegionIds = useMemo(
     () => new Set(regions.map((region) => region.regionId)),
@@ -730,8 +822,18 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
         <SearchView
           region={region}
           rules={rules}
+          onBulk={() => setView('bulk')}
           onToday={() => setView('today')}
           onWeekly={() => setView('weekly')}
+          onChangeRegion={() => setView('setup')}
+        />
+      )}
+      {view === 'bulk' && region && (
+        <BulkDisposalView
+          region={region}
+          rules={rules}
+          onSearch={() => setView('search')}
+          onToday={() => setView('today')}
           onChangeRegion={() => setView('setup')}
         />
       )}
