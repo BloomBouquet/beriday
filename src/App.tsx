@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { searchItems } from './domain/items/searchItems';
 import { buildWeeklySchedule, type WeeklyScheduleDay } from './domain/schedule/buildWeeklySchedule';
 import { evaluateSchedule, type ScheduleResult, type ScheduleStatus } from './domain/schedule/evaluateSchedule';
 import type { CollectionRule, RuleProvenance, TimeWindow, WasteCategory } from './domain/waste/types';
@@ -25,7 +26,7 @@ type AppProps = {
   dataSummary?: DataVerificationSummary | null;
 };
 
-type View = 'home' | 'setup' | 'today' | 'weekly';
+type View = 'home' | 'setup' | 'today' | 'weekly' | 'search';
 
 type TodayItem = {
   category: Extract<WasteCategory, 'general' | 'food' | 'recycling'>;
@@ -415,12 +416,14 @@ function TodayView({
   region,
   rules,
   dataSummary,
+  onSearch,
   onWeekly,
   onChangeRegion,
 }: {
   region: RegionOption;
   rules: readonly CollectionRule[];
   dataSummary: DataVerificationSummary | null;
+  onSearch: () => void;
   onWeekly: () => void;
   onChangeRegion: () => void;
 }) {
@@ -439,6 +442,7 @@ function TodayView({
           <h1 id="today-title">오늘의 배출</h1>
         </div>
         <div className="today-actions">
+          <button className="secondary-button" type="button" onClick={onSearch}>품목 검색</button>
           <button className="secondary-button" type="button" onClick={onWeekly}>주간 일정 보기</button>
           <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
         </div>
@@ -481,11 +485,13 @@ function TodayView({
 function WeeklyView({
   region,
   rules,
+  onSearch,
   onToday,
   onChangeRegion,
 }: {
   region: RegionOption;
   rules: readonly CollectionRule[];
+  onSearch: () => void;
   onToday: () => void;
   onChangeRegion: () => void;
 }) {
@@ -502,6 +508,7 @@ function WeeklyView({
           <p className="weekly-range">{formatWeekRange(schedule.days)}</p>
         </div>
         <div className="today-actions">
+          <button className="secondary-button" type="button" onClick={onSearch}>품목 검색</button>
           <button className="secondary-button" type="button" onClick={onToday}>오늘 보기</button>
           <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
         </div>
@@ -537,6 +544,122 @@ function WeeklyView({
               ) : (
                 <span className="weekly-empty">배출 일정 없음</span>
               )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function SearchView({
+  region,
+  rules,
+  onToday,
+  onWeekly,
+  onChangeRegion,
+}: {
+  region: RegionOption;
+  rules: readonly CollectionRule[];
+  onToday: () => void;
+  onWeekly: () => void;
+  onChangeRegion: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const results = useMemo(() => searchItems(query), [query]);
+  const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
+  const scheduleByCategory = new Map<WasteCategory, ScheduleResult>(
+    evaluateSchedule([...regionRules], new Date()).map((result) => [result.category, result]),
+  );
+
+  return (
+    <section className="search-page" aria-labelledby="search-title">
+      <div className="today-header">
+        <div>
+          <p className="eyebrow">배출 방법 찾기</p>
+          <p className="region-name">{region.sido} {region.sigungu} {region.areaName}</p>
+          <h1 id="search-title">어떻게 버릴까요?</h1>
+        </div>
+        <div className="today-actions">
+          <button className="secondary-button" type="button" onClick={onToday}>오늘 보기</button>
+          <button className="secondary-button" type="button" onClick={onWeekly}>주간 일정 보기</button>
+          <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
+        </div>
+      </div>
+
+      <label className="item-search-field">
+        <span>버릴 품목 검색</span>
+        <input
+          type="search"
+          aria-label="버릴 품목 검색"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="예: 스티로폼 상자"
+        />
+      </label>
+
+      {!query.trim() && (
+        <p className="search-empty-state">품목 이름을 입력하면 공식 배출 가이드와 선택 지역 일정을 함께 확인할 수 있습니다.</p>
+      )}
+
+      {query.trim() && results.length === 0 && (
+        <div className="search-empty-state" role="status">
+          <strong>검색 결과가 없습니다.</strong>
+          <span>확인되지 않은 품목의 배출 방법은 임의로 만들지 않습니다.</span>
+        </div>
+      )}
+
+      <div className="search-results" aria-live="polite">
+        {results.map((item) => {
+          const schedule = scheduleByCategory.get(item.category) ?? null;
+          const window = schedule ? formatWindow(schedule.currentWindow) : null;
+          const next = schedule ? formatNextAvailable(schedule.nextAvailableAt) : null;
+          const verificationReason = getVerificationReason(schedule);
+          const trustedItemSource = isAllowedOfficialUrl(item.sourceUrl);
+
+          return (
+            <article className="search-result-card" key={item.id} aria-label={`${item.names[0]} 검색 결과`}>
+              <div className="search-result-heading">
+                <div>
+                  <span className="data-card-label">{CATEGORY_LABELS[item.category]}</span>
+                  <h2>{item.names[0]}</h2>
+                </div>
+                <span className="preview-status">배출 방법</span>
+              </div>
+
+              <div className="search-result-section">
+                <strong>준비 방법</strong>
+                <ul>
+                  {item.preparation.map((step) => <li key={step}>{step}</li>)}
+                </ul>
+              </div>
+
+              {item.warnings.length > 0 && (
+                <div className="search-result-section">
+                  <strong>주의</strong>
+                  <ul>
+                    {item.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="search-result-source">
+                <span>배출 방법 출처</span>
+                {trustedItemSource ? (
+                  <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">{item.sourceName}</a>
+                ) : (
+                  <strong>{item.sourceName}</strong>
+                )}
+              </div>
+
+              <div className="regional-schedule-card" role="group" aria-label="선택 지역 일정">
+                <span className="data-card-label">선택 지역 일정</span>
+                <strong>{region.sido} {region.sigungu} {region.areaName}</strong>
+                <span>{schedule ? STATUS_LABELS[schedule.status] : '확인 필요'}</span>
+                {window && <span>{window}</span>}
+                {next && <span>다음 일정 {next}</span>}
+                {verificationReason && <span className="verification-reason">{verificationReason}</span>}
+              </div>
             </article>
           );
         })}
@@ -589,6 +712,7 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           region={region}
           rules={rules}
           dataSummary={dataSummary}
+          onSearch={() => setView('search')}
           onWeekly={() => setView('weekly')}
           onChangeRegion={() => setView('setup')}
         />
@@ -597,7 +721,17 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
         <WeeklyView
           region={region}
           rules={rules}
+          onSearch={() => setView('search')}
           onToday={() => setView('today')}
+          onChangeRegion={() => setView('setup')}
+        />
+      )}
+      {view === 'search' && region && (
+        <SearchView
+          region={region}
+          rules={rules}
+          onToday={() => setView('today')}
+          onWeekly={() => setView('weekly')}
           onChangeRegion={() => setView('setup')}
         />
       )}
