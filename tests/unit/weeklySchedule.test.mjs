@@ -68,3 +68,18 @@ test('does not place an excluded verified schedule on that weekly day', () => {
 
   assert.deepEqual(schedule.days[4].scheduledCategories, []);
 });
+
+test('keeps a Seoul Sunday in the same Monday-Sunday week across a year boundary', () => {
+  const schedule = buildWeeklySchedule([], new Date('2027-01-03T03:00:00.000Z'));
+
+  assert.deepEqual(schedule.days.map((day) => day.dateKey), [
+    '2026-12-28',
+    '2026-12-29',
+    '2026-12-30',
+    '2026-12-31',
+    '2027-01-01',
+    '2027-01-02',
+    '2027-01-03',
+  ]);
+  assert.deepEqual(schedule.days.map((day) => day.weekday), [1, 2, 3, 4, 5, 6, 0]);
+});
