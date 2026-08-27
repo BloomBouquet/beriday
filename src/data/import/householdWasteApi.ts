@@ -1,4 +1,7 @@
-import type { OfficialHouseholdWasteRow } from './householdWasteCsv.js';
+import type {
+  OfficialCsvImportReport,
+  OfficialHouseholdWasteRow,
+} from './householdWasteCsv.js';
 
 const OFFICIAL_API_URL = 'https://apis.data.go.kr/1741000/household_waste_info/info';
 
@@ -7,12 +10,14 @@ export type OfficialHouseholdWasteApiPage = {
   numOfRows: number;
   totalCount: number;
   rows: OfficialHouseholdWasteRow[];
+  sourceReport: OfficialCsvImportReport;
 };
 
 export type OfficialHouseholdWasteApiCollection = {
   totalCount: number;
   pagesFetched: number;
   rows: OfficialHouseholdWasteRow[];
+  sourceReport: OfficialCsvImportReport;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -70,13 +75,30 @@ export function parseOfficialHouseholdWasteApiPage(payload: unknown): OfficialHo
   }
 
   const sourceOffset = Math.max(0, (pageNo - 1) * numOfRows);
-  const rows = rawItems.map((rawItem, index): OfficialHouseholdWasteRow => {
+  const rows: OfficialHouseholdWasteRow[] = [];
+  const errors: OfficialCsvImportReport['errors'] = [];
+
+  rawItems.forEach((rawItem, index) => {
     const item = asRecord(rawItem, `item ${index + 1}`);
-    return {
-      sourceRow: sourceOffset + index + 1,
-      sido: asString(item, 'CTPV_NM'),
-      sigungu: asString(item, 'SGG_NM'),
-      managementAreaName: asString(item, 'MNG_ZONE_NM'),
+    const sourceRow = sourceOffset + index + 1;
+    const sido = asString(item, 'CTPV_NM');
+    const sigungu = asString(item, 'SGG_NM');
+    const managementAreaName = asString(item, 'MNG_ZONE_NM');
+
+    if (!sido || !sigungu || !managementAreaName) {
+      errors.push({
+        row: sourceRow,
+        code: 'missing-region-key',
+        message: 'Missing 시도명, 시군구명, or 관리구역명',
+      });
+      return;
+    }
+
+    rows.push({
+      sourceRow,
+      sido,
+      sigungu,
+      managementAreaName,
       targetAreaNames: parseTargetAreaNames(asString(item, 'MNG_ZONE_TRGT_RGN_NM')),
       generalMethod: asString(item, 'LF_WST_EMSN_MTHD'),
       foodMethod: asString(item, 'FOD_WST_EMSN_MTHD'),
@@ -94,10 +116,21 @@ export function parseOfficialHouseholdWasteApiPage(payload: unknown): OfficialHo
       authorityName: asString(item, 'MNG_DEPT_NM'),
       authorityContact: asString(item, 'MNG_DEPT_TELNO'),
       sourceUpdatedAt: asString(item, 'DAT_CRTR_YMD'),
-    };
+    });
   });
 
-  return { pageNo, numOfRows, totalCount, rows };
+  return {
+    pageNo,
+    numOfRows,
+    totalCount,
+    rows,
+    sourceReport: {
+      totalRows: rawItems.length,
+      acceptedRows: rows.length,
+      rejectedRows: errors.length,
+      errors,
+    },
+  };
 }
 
 export async function fetchOfficialHouseholdWasteApiRows({
@@ -117,8 +150,15 @@ export async function fetchOfficialHouseholdWasteApiRows({
   }
 
   const rows: OfficialHouseholdWasteRow[] = [];
+  const sourceReport: OfficialCsvImportReport = {
+    totalRows: 0,
+    acceptedRows: 0,
+    rejectedRows: 0,
+    errors: [],
+  };
   let pageNo = 1;
   let totalCount = 0;
+  let processedRows = 0;
 
   do {
     const url = new URL(OFFICIAL_API_URL);
@@ -136,15 +176,28 @@ export async function fetchOfficialHouseholdWasteApiRows({
     if (page.pageNo !== pageNo) {
       throw new Error(`Official Open API returned page ${page.pageNo} while requesting page ${pageNo}`);
     }
+    if (pageNo > 1 && page.totalCount !== totalCount) {
+      throw new Error('Official Open API totalCount changed during pagination');
+    }
 
     totalCount = page.totalCount;
+    processedRows += page.sourceReport.totalRows;
     rows.push(...page.rows);
+    sourceReport.totalRows += page.sourceReport.totalRows;
+    sourceReport.acceptedRows += page.sourceReport.acceptedRows;
+    sourceReport.rejectedRows += page.sourceReport.rejectedRows;
+    sourceReport.errors.push(...page.sourceReport.errors);
     pageNo += 1;
-  } while (rows.length < totalCount);
+  } while (processedRows < totalCount);
+
+  if (processedRows !== totalCount) {
+    throw new Error(`Official Open API returned ${processedRows} source rows for totalCount ${totalCount}`);
+  }
 
   return {
     totalCount,
     pagesFetched: pageNo - 1,
     rows,
+    sourceReport,
   };
 }
