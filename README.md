@@ -31,6 +31,9 @@
 - 공식 `+` 요일 구분자와 시작/종료 시각을 기존 parser 입력 계약으로 변환
 - 원본 CSV `sourceRow`를 rule provenance와 validation error까지 유지
 - 구체 날짜로 안전하게 표현할 수 없는 `미수거일`은 verified rule 생성을 차단
+- 공식 CSV → parser → adapter 결과를 `schemaVersion: 1` production bundle로 조합
+- bundle에 source/mapping/normalization/adapter 검증 report를 함께 보존
+- Region/CollectionRule을 locale/ICU 비의존 UTF-16 코드 단위 순서로 정렬해 deterministic output 보장
 
 ## 검증
 
@@ -68,5 +71,7 @@ GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, pr
 - 시작/종료 시각은 기존 시간 parser가 검증하도록 하나의 range 문자열로 조립하며, 값이 불완전하면 rule을 생성하지 않습니다.
 - `미수거일`이 `YYYY-MM-DD` 목록이면 excluded date로 변환하지만 `명절`, `임시공휴일`처럼 현재 모델이 정확히 표현할 수 없는 의미가 포함되면 해당 source row의 rule 생성을 차단합니다.
 - schedule parsing error와 rule provenance는 adapter에서 재번호화하지 않고 공식 CSV `sourceRow`를 유지합니다.
+- production bundle은 raw CSV row를 다시 포함하지 않고 앱에 필요한 canonical Region/CollectionRule과 검증 report만 보존합니다.
+- 같은 CSV와 같은 `importedAt` 입력은 런타임 locale 설정에 관계없이 동일한 Region/CollectionRule ordering을 갖습니다.
 
-다음 구현 단계는 검증된 공식 Region/CollectionRule 결과를 production 데이터 asset으로 생성하는 deterministic build pipeline을 만들고, 그 asset을 지역 선택 및 Today 화면에 읽기 전용으로 연결하는 작업입니다.
+다음 구현 단계는 deterministic bundle을 JSON production asset으로 직렬화하는 build boundary를 만들고, 그 asset을 지역 선택 및 Today 화면에서 읽기 전용으로 소비하도록 연결하는 작업입니다.
