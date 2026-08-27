@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { evaluateSchedule, type ScheduleResult, type ScheduleStatus } from './domain/schedule/evaluateSchedule';
+import type { CollectionRule, TimeWindow, WasteCategory } from './domain/waste/types';
 import { getSavedRegion, saveRegion } from './storage/savedRegion';
 
 export type RegionOption = {
@@ -10,20 +12,60 @@ export type RegionOption = {
 
 type AppProps = {
   regions?: readonly RegionOption[];
+  rules?: readonly CollectionRule[];
 };
 
 type View = 'home' | 'setup' | 'today';
 
-const EMPTY_REGIONS: readonly RegionOption[] = [];
+type TodayItem = {
+  category: Extract<WasteCategory, 'general' | 'food' | 'recycling'>;
+  label: string;
+  state: string;
+  icon: string;
+};
 
-const previewItems = [
-  { label: '일반쓰레기', state: '지역 설정 후 확인', icon: '●' },
-  { label: '음식물', state: '오늘 일정 계산', icon: '▲' },
-  { label: '재활용', state: '다음 배출일 안내', icon: '◆' },
+const EMPTY_REGIONS: readonly RegionOption[] = [];
+const EMPTY_RULES: readonly CollectionRule[] = [];
+
+const previewItems: readonly TodayItem[] = [
+  { category: 'general', label: '일반쓰레기', state: '지역 설정 후 확인', icon: '●' },
+  { category: 'food', label: '음식물', state: '오늘 일정 계산', icon: '▲' },
+  { category: 'recycling', label: '재활용', state: '다음 배출일 안내', icon: '◆' },
 ];
+
+const STATUS_LABELS: Record<ScheduleStatus, string> = {
+  available: '가능',
+  upcoming: '예정',
+  closed: '마감',
+  unavailable: '불가',
+  'needs-verification': '확인 필요',
+};
 
 function findRegion(regions: readonly RegionOption[], regionId: string): RegionOption | null {
   return regions.find((region) => region.regionId === regionId) ?? null;
+}
+
+function formatWindow(window: TimeWindow | null): string | null {
+  if (!window?.start) return null;
+  if (!window.end) return `${window.start} 이후`;
+  return `${window.start}~${window.end}`;
+}
+
+function formatNextAvailable(value: string | null): string | null {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
 }
 
 function HomeView({ onStart }: { onStart: () => void }) {
@@ -50,7 +92,7 @@ function HomeView({ onStart }: { onStart: () => void }) {
           </div>
           <div className="preview-list">
             {previewItems.map((item) => (
-              <div className="preview-item" key={item.label}>
+              <div className="preview-item" key={item.category}>
                 <span className="preview-icon" aria-hidden="true">{item.icon}</span>
                 <div>
                   <strong>{item.label}</strong>
@@ -189,7 +231,21 @@ function RegionSetupView({
   );
 }
 
-function TodayView({ region, onChangeRegion }: { region: RegionOption; onChangeRegion: () => void }) {
+function TodayView({
+  region,
+  rules,
+  onChangeRegion,
+}: {
+  region: RegionOption;
+  rules: readonly CollectionRule[];
+  onChangeRegion: () => void;
+}) {
+  const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
+  const results = evaluateSchedule([...regionRules], new Date());
+  const resultByCategory = new Map<WasteCategory, ScheduleResult>(
+    results.map((result) => [result.category, result]),
+  );
+
   return (
     <section className="today-page" aria-labelledby="today-title">
       <div className="today-header">
@@ -202,24 +258,36 @@ function TodayView({ region, onChangeRegion }: { region: RegionOption; onChangeR
       </div>
 
       <div className="sample-banner" role="note">
-        <strong>배출 일정 데이터 연결 대기</strong>
-        <span>공식 일정 데이터가 연결되기 전에는 배출 가능 여부를 임의로 판단하지 않습니다.</span>
+        <strong>{regionRules.length > 0 ? '공식 일정 기준' : '확인 필요'}</strong>
+        <span>
+          {regionRules.length > 0
+            ? '검증된 공식 데이터로 오늘 상태를 계산합니다.'
+            : '선택한 지역의 검증된 일정 규칙이 없어 임의로 판단하지 않습니다.'}
+        </span>
       </div>
 
       <div className="today-grid" aria-label="오늘 배출 상태">
-        {previewItems.map((item) => (
-          <article key={item.label} className="today-card">
-            <span className="preview-icon" aria-hidden="true">{item.icon}</span>
-            <strong>{item.label}</strong>
-            <span>공식 일정 연결 대기</span>
-          </article>
-        ))}
+        {previewItems.map((item) => {
+          const result = resultByCategory.get(item.category) ?? null;
+          const window = result ? formatWindow(result.currentWindow) : null;
+          const next = result ? formatNextAvailable(result.nextAvailableAt) : null;
+
+          return (
+            <article key={item.category} className="today-card">
+              <span className="preview-icon" aria-hidden="true">{item.icon}</span>
+              <strong>{item.label}</strong>
+              <span>{result ? STATUS_LABELS[result.status] : '확인 필요'}</span>
+              {window && <span>{window}</span>}
+              {next && <span>다음 일정 {next}</span>}
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-export default function App({ regions = EMPTY_REGIONS }: AppProps) {
+export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES }: AppProps) {
   const validRegionIds = useMemo(
     () => new Set(regions.map((region) => region.regionId)),
     [regions],
@@ -259,7 +327,7 @@ export default function App({ regions = EMPTY_REGIONS }: AppProps) {
       {view === 'home' && <HomeView onStart={() => setView('setup')} />}
       {view === 'setup' && <RegionSetupView regions={regions} onComplete={completeRegionSetup} />}
       {view === 'today' && region && (
-        <TodayView region={region} onChangeRegion={() => setView('setup')} />
+        <TodayView region={region} rules={rules} onChangeRegion={() => setView('setup')} />
       )}
     </main>
   );
