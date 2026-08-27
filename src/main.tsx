@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import OfficialDataApp from './OfficialDataApp';
 import './styles.css';
+import './search.css';
 
 const root = document.getElementById('root');
 
