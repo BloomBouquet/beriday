@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-tests/
+coverage/
+playwright-report/
+test-results/
+data/raw/*
+!data/raw/.gitkeep
+.env
+.env.*
+!.env.example

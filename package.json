@@ -1,0 +1,11 @@
+{
+  "name": "beriday",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:domain": "tsc -p tsconfig.build.json",
+    "test:domain": "npm run build:domain && node --test tests/unit/*.test.mjs"
+  }
+}

@@ -1,0 +1,4 @@
+sido,sigungu,areaName,generalWeekdays,generalTime,generalMethod,foodWeekdays,foodTime,foodMethod,recyclingWeekdays,recyclingTime,recyclingMethod,noCollectionDays,authorityName,authorityContact,sourceUpdatedAt
+광주광역시,북구,테스트동,월/수/금,20:00~02:00,종량제 봉투 사용,매일,18시 이후,전용 용기 사용,화/목,20:00~02:00,품목별 분리,2026-09-01,테스트 행정기관,000-0000-0000,2026-08-20
+부산광역시,테스트구,샘플동,화/목,19:00~23:00,종량제 봉투 사용,월/수/금,18:00~22:00,전용 용기 사용,토,09:00~12:00,품목별 분리,,테스트 행정기관,000-0000-0000,2026-08-20
+서울특별시,테스트구,예시동,매일,18시 이후,종량제 봉투 사용,매일,18시 이후,전용 용기 사용,수,20:00~22:00,품목별 분리,,테스트 행정기관,000-0000-0000,2026-08-20
