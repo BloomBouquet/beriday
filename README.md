@@ -27,6 +27,10 @@
 - 사용자 선택 지역과 `관리구역명` 수거권역을 별도 엔티티로 분리
 - 동일 target→collection zone 중복 source provenance 병합
 - 한 대상지역이 여러 수거권역에 매핑되면 selectable catalog에서 제외하고 ambiguous 보고
+- 공식 target-area mapping을 기존 `CollectionRule` 정규화 계층으로 연결하는 adapter
+- 공식 `+` 요일 구분자와 시작/종료 시각을 기존 parser 입력 계약으로 변환
+- 원본 CSV `sourceRow`를 rule provenance와 validation error까지 유지
+- 구체 날짜로 안전하게 표현할 수 없는 `미수거일`은 verified rule 생성을 차단
 
 ## 검증
 
@@ -59,5 +63,10 @@ GitHub Actions에서도 도메인 테스트, UI 테스트, TypeScript 검사, pr
 - 대상지역 정보가 없는 source row는 임의의 선택 지역을 생성하지 않고 unresolved로 보고합니다.
 - 같은 대상지역이 서로 다른 수거권역에 연결되면 임의로 하나를 선택하지 않고 selectable catalog에서 제외합니다.
 - 같은 대상지역→수거권역 연결이 여러 source row에 반복되면 association은 하나로 합치되 source row와 기준일 provenance는 보존합니다.
+- 공식 일정 adapter는 안전한 selectable target area에 대해서만 생활/음식물/재활용 `CollectionRule`을 생성합니다.
+- 공식 CSV의 `월+수+금` 같은 요일 표현은 기존 요일 parser가 처리할 수 있도록 구분자만 정규화합니다.
+- 시작/종료 시각은 기존 시간 parser가 검증하도록 하나의 range 문자열로 조립하며, 값이 불완전하면 rule을 생성하지 않습니다.
+- `미수거일`이 `YYYY-MM-DD` 목록이면 excluded date로 변환하지만 `명절`, `임시공휴일`처럼 현재 모델이 정확히 표현할 수 없는 의미가 포함되면 해당 source row의 rule 생성을 차단합니다.
+- schedule parsing error와 rule provenance는 adapter에서 재번호화하지 않고 공식 CSV `sourceRow`를 유지합니다.
 
-다음 구현 단계는 검증된 target-area association을 공식 생활/음식물/재활용 일정 필드와 결합해 기존 CollectionRule 도메인으로 변환하는 작업입니다.
+다음 구현 단계는 검증된 공식 Region/CollectionRule 결과를 production 데이터 asset으로 생성하는 deterministic build pipeline을 만들고, 그 asset을 지역 선택 및 Today 화면에 읽기 전용으로 연결하는 작업입니다.
