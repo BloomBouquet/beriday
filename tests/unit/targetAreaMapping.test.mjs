@@ -97,6 +97,14 @@ test('merges duplicate target-to-zone associations while preserving each source 
   );
 });
 
+test('preserves sourceRow supplied by the official CSV parser instead of renumbering accepted rows', () => {
+  const result = buildTargetAreaCatalog([
+    sourceRow({ sourceRow: 7, targetAreaNames: ['일곡동'] }),
+  ]);
+
+  assert.equal(result.associations[0].sources[0].sourceRow, 7);
+});
+
 test('excludes a target area from the selectable catalog when it maps to multiple collection zones', () => {
   const result = buildTargetAreaCatalog([
     sourceRow({ targetAreaNames: ['일곡동'], managementAreaName: '1권역' }),
