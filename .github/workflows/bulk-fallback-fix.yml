@@ -24,22 +24,28 @@ jobs:
           path = Path('src/App.tsx')
           text = path.read_text(encoding='utf-8')
 
-          old_source = """  const fallbackSource = uniqueProvenance(regionRules).find(
-            (source) => source.authorityName || source.authorityContact,
-          ) ?? null;
-          """
-          new_source = """  const fallbackSources = uniqueProvenance(regionRules).filter(
+          source_start_marker = '  const fallbackSource = uniqueProvenance(regionRules).find('
+          source_end_marker = '  const canLinkGuide = Boolean(guide && isAllowedOfficialUrl(guide.procedureUrl));'
+
+          if source_start_marker in text:
+              source_start = text.index(source_start_marker)
+              source_end = text.index(source_end_marker, source_start)
+              replacement = """  const fallbackSources = uniqueProvenance(regionRules).filter(
             (source) => source.authorityName || source.authorityContact,
           );
           """
+              text = text[:source_start] + replacement + text[source_end:]
+          elif '  const fallbackSources = uniqueProvenance(regionRules).filter(' not in text:
+              raise SystemExit('fallback source block not found')
 
-          old_view = """          <div className=\"search-result-section\">
-            <strong>{fallbackSource?.authorityName ?? `${region.sigungu} 담당기관`}</strong>
-            {fallbackSource?.authorityContact && <span>{fallbackSource.authorityContact}</span>}
-            <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
-          </div>
-          """
-          new_view = """          <div className=\"search-result-section\">
+          view_start_marker = '        ) : (\n          <div className="search-result-section">\n            <strong>{fallbackSource?.authorityName'
+          view_end_marker = '\n        )}\n\n        <div className="search-result-source">'
+
+          if view_start_marker in text:
+              view_start = text.index(view_start_marker)
+              view_end = text.index(view_end_marker, view_start)
+              replacement = """        ) : (
+          <div className="search-result-section">
             {fallbackSources.length > 0 ? (
               fallbackSources.map((source) => (
                 <div key={provenanceKey(source)}>
@@ -51,15 +57,11 @@ jobs:
               <strong>{region.sigungu} 담당기관</strong>
             )}
             <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
-          </div>
-          """
+          </div>"""
+              text = text[:view_start] + replacement + text[view_end:]
+          elif '            {fallbackSources.length > 0 ? (' not in text:
+              raise SystemExit('fallback view block not found')
 
-          if old_source not in text:
-              raise SystemExit('fallback source snippet not found')
-          if old_view not in text:
-              raise SystemExit('fallback view snippet not found')
-
-          text = text.replace(old_source, new_source, 1).replace(old_view, new_view, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
