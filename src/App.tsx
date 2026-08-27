@@ -687,9 +687,9 @@ function BulkDisposalView({
 }) {
   const guide = getBulkDisposalGuide(region.sido, region.sigungu);
   const regionRules = rules.filter((rule) => rule.regionId === region.regionId);
-  const fallbackSource = uniqueProvenance(regionRules).find(
-    (source) => source.authorityName || source.authorityContact,
-  ) ?? null;
+  const fallbackSources = uniqueProvenance(regionRules).filter(
+  (source) => source.authorityName || source.authorityContact,
+);
   const canLinkGuide = Boolean(guide && isAllowedOfficialUrl(guide.procedureUrl));
 
   return (
@@ -735,11 +735,19 @@ function BulkDisposalView({
             </div>
           </>
         ) : (
-          <div className="search-result-section">
-            <strong>{fallbackSource?.authorityName ?? `${region.sigungu} 담당기관`}</strong>
-            {fallbackSource?.authorityContact && <span>{fallbackSource.authorityContact}</span>}
-            <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
-          </div>
+<div className="search-result-section">
+  {fallbackSources.length > 0 ? (
+    fallbackSources.map((source) => (
+      <div key={provenanceKey(source)}>
+        <strong>{source.authorityName ?? `${region.sigungu} 담당기관`}</strong>
+        {source.authorityContact && <span>{source.authorityContact}</span>}
+      </div>
+    ))
+  ) : (
+    <strong>{region.sigungu} 담당기관</strong>
+  )}
+  <span>확인된 공식 신청 URL이 없으므로 임의 링크를 제공하지 않습니다.</span>
+</div>
         )}
 
         <div className="search-result-source">
