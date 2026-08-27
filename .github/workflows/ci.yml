@@ -17,36 +17,6 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Inspect official API envelope via diagnostic proxy
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --get \
-            'https://k-skill-proxy.nomadamas.org/v1/household-waste/info' \
-            --data-urlencode 'cond[SGG_NM::LIKE]=강남구' \
-            --data-urlencode 'pageNo=1' \
-            --data-urlencode 'numOfRows=100' \
-            --output /tmp/official-api.json
-          node <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('/tmp/official-api.json', 'utf8'));
-          const response = data?.response;
-          const body = response?.body;
-          const items = body?.items;
-          const describe = (value) => ({
-            type: Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value,
-            keys: value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value).slice(0, 30) : [],
-            length: Array.isArray(value) ? value.length : null,
-          });
-          const itemCandidate = Array.isArray(items) ? items[0] : Array.isArray(items?.item) ? items.item[0] : null;
-          console.log(JSON.stringify({
-            response: describe(response),
-            responseHeader: describe(response?.header),
-            responseBody: describe(body),
-            bodyItems: describe(items),
-            bodyItemsItem: describe(items?.item),
-            firstItemKeys: itemCandidate && typeof itemCandidate === 'object' ? Object.keys(itemCandidate).slice(0, 60) : [],
-          }, null, 2));
-          NODE
       - name: Domain tests
         run: npm run test:domain
       - name: UI tests when configured
