@@ -110,14 +110,17 @@ test('keeps source parser rejection counts while adapting only accepted rows', (
   assert.equal(bundle.rules[0].provenance.sourceId, 'household-waste:2');
 });
 
-test('retains conservative adapter errors and emits no rules for unsupported no-collection semantics', () => {
+test('retains conservative adapter errors while preserving unsupported exclusion schedules as ambiguous', () => {
   const csv = `${headers}\n${validRow({ targetAreas: '일곡동', noCollectionDays: '명절+임시공휴일' })}`;
 
   const bundle = buildOfficialDataBundle(csv, importedAt);
 
   assert.deepEqual(bundle.regions.map((region) => region.id), ['광주광역시/북구/일곡동']);
-  assert.deepEqual(bundle.rules, []);
-  assert.equal(bundle.reports.adapter.skippedSourceRows, 1);
+  assert.equal(bundle.rules.length, 3);
+  assert.ok(bundle.rules.every((rule) => rule.confidence === 'ambiguous'));
+  assert.ok(bundle.rules.every((rule) => rule.excludedDates.length === 0));
+  assert.equal(bundle.reports.normalization.ambiguousRows, 1);
+  assert.equal(bundle.reports.adapter.skippedSourceRows, 0);
   assert.deepEqual(bundle.reports.adapter.errors, [
     {
       row: 1,
