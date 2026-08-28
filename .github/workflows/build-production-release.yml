@@ -1,0 +1,76 @@
+name: Build production release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release-artifact
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Verify production data pair
+        run: npm run verify:production-data
+
+      - name: Run repository verification
+        run: |
+          npm run test:domain
+          npm test
+          npm run typecheck
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Verify packaged official data
+        shell: bash
+        run: |
+          test -s dist/data/official-data.json
+          cmp public/data/official-data.json dist/data/official-data.json
+
+      - name: Write release metadata
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+          const report = JSON.parse(fs.readFileSync('data/reports/official-data-validation.json', 'utf8'));
+          const metadata = {
+            commitSha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+            importedAt: report.importedAt,
+            sourceUpdatedAt: report.sourceUpdatedAt,
+            coveredRegions: report.coveredRegions,
+            rules: report.rules,
+          };
+          fs.writeFileSync('release-metadata.json', `${JSON.stringify(metadata, null, 2)}\n`);
+          NODE
+
+      - name: Upload production release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: beriday-production-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/
+            release-metadata.json
+            data/reports/official-data-validation.json
