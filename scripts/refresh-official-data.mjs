@@ -1,10 +1,13 @@
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { buildOfficialDataBundleFromRows } from '../dist-tests/src/data/canonical/officialDataBundle.js';
 import { serializeOfficialDataAsset } from '../dist-tests/src/data/canonical/officialDataAsset.js';
+import {
+  buildOfficialDataValidationSummary,
+  serializeOfficialDataValidationSummary,
+} from '../dist-tests/src/data/canonical/officialDataValidationSummary.js';
 import { fetchOfficialHouseholdWasteApiRows } from '../dist-tests/src/data/import/householdWasteApi.js';
+import { writeOfficialDataOutputs } from './official-data-outputs.mjs';
 
-const USAGE = 'Usage: node scripts/refresh-official-data.mjs --output <json> --imported-at <timestamp>';
+const USAGE = 'Usage: node scripts/refresh-official-data.mjs --output <json> --report-output <json> --imported-at <timestamp>';
 
 function parseArgs(argv) {
   const options = {};
@@ -14,9 +17,10 @@ function parseArgs(argv) {
     const value = argv[index + 1];
 
     if (flag === '--output') options.output = value;
+    if (flag === '--report-output') options.reportOutput = value;
     if (flag === '--imported-at') options.importedAt = value;
 
-    if (flag === '--output' || flag === '--imported-at') {
+    if (flag === '--output' || flag === '--report-output' || flag === '--imported-at') {
       index += 1;
     }
   }
@@ -27,7 +31,7 @@ function parseArgs(argv) {
 const options = parseArgs(process.argv.slice(2));
 const serviceKey = process.env.DATA_GO_KR_API_KEY?.trim();
 
-if (!options.output || !options.importedAt) {
+if (!options.output || !options.reportOutput || !options.importedAt) {
   console.error(USAGE);
   process.exitCode = 1;
 } else if (!serviceKey) {
@@ -41,26 +45,27 @@ if (!options.output || !options.importedAt) {
       collection.sourceReport,
       options.importedAt,
     );
-    const asset = serializeOfficialDataAsset(bundle);
+    const summary = buildOfficialDataValidationSummary(bundle);
 
-    await mkdir(path.dirname(options.output), { recursive: true });
-    const temporaryOutput = `${options.output}.tmp-${process.pid}`;
-
-    try {
-      await writeFile(temporaryOutput, asset, { encoding: 'utf8', flag: 'wx' });
-      await rename(temporaryOutput, options.output);
-    } finally {
-      await rm(temporaryOutput, { force: true });
+    if (summary.criticalErrors.length > 0) {
+      throw new Error(`Official data validation failed: ${summary.criticalErrors.join(' ')}`);
     }
 
+    const asset = serializeOfficialDataAsset(bundle);
+    const report = serializeOfficialDataValidationSummary(summary);
+
+    await writeOfficialDataOutputs({
+      assetOutput: options.output,
+      reportOutput: options.reportOutput,
+      asset,
+      report,
+    });
+
     console.log(JSON.stringify({
-      sourceRows: collection.sourceReport.totalRows,
-      acceptedRows: collection.sourceReport.acceptedRows,
-      rejectedRows: collection.sourceReport.rejectedRows,
+      ...summary,
       pagesFetched: collection.pagesFetched,
-      regions: bundle.regions.length,
-      rules: bundle.rules.length,
       output: options.output,
+      reportOutput: options.reportOutput,
     }));
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
