@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getBulkDisposalGuide } from './domain/bulk/guides';
 import { searchItems } from './domain/items/searchItems';
 import { buildWeeklySchedule, type WeeklyScheduleDay } from './domain/schedule/buildWeeklySchedule';
@@ -22,10 +22,14 @@ export type DataVerificationSummary = {
   rejectedRows: number | null;
 };
 
+export type RegionDataStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 type AppProps = {
   regions?: readonly RegionOption[];
   rules?: readonly CollectionRule[];
   dataSummary?: DataVerificationSummary | null;
+  onRegionChange?: (regionId: string | null) => void;
+  regionDataStatus?: RegionDataStatus;
 };
 
 type View = 'home' | 'setup' | 'today' | 'weekly' | 'search' | 'bulk' | 'settings';
@@ -414,6 +418,33 @@ function DataTrustPanel({
   );
 }
 
+function RegionDataStateView({
+  region,
+  status,
+  onChangeRegion,
+}: {
+  region: RegionOption;
+  status: Exclude<RegionDataStatus, 'ready'>;
+  onChangeRegion: () => void;
+}) {
+  const isError = status === 'error';
+  return (
+    <section className="setup-panel" role="status" aria-live="polite">
+      <div className="setup-copy">
+        <p className="eyebrow">선택한 지역</p>
+        <p className="region-name">{region.sido} {region.sigungu} {region.areaName}</p>
+        <h1>{isError ? '지역 일정 데이터를 불러오지 못했습니다.' : '지역 일정 데이터를 불러오는 중입니다.'}</h1>
+        <p className="hero-description">
+          {isError
+            ? '선택한 지역의 검증된 일정 규칙을 확인할 수 없어 배출 가능 여부를 표시하지 않습니다.'
+            : '선택한 시/군/구의 검증된 일정 규칙을 준비하고 있습니다.'}
+        </p>
+        <button className="secondary-button" type="button" onClick={onChangeRegion}>지역 다시 설정</button>
+      </div>
+    </section>
+  );
+}
+
 function TodayView({
   region,
   rules,
@@ -761,7 +792,13 @@ function BulkDisposalView({
   );
 }
 
-export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, dataSummary = null }: AppProps) {
+export default function App({
+  regions = EMPTY_REGIONS,
+  rules = EMPTY_RULES,
+  dataSummary = null,
+  onRegionChange,
+  regionDataStatus = 'ready',
+}: AppProps) {
   const validRegionIds = useMemo(
     () => new Set(regions.map((region) => region.regionId)),
     [regions],
@@ -777,17 +814,25 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
   });
   const [view, setView] = useState<View>(() => (region ? 'today' : 'home'));
 
+  useEffect(() => {
+    onRegionChange?.(region?.regionId ?? null);
+  }, [onRegionChange, region?.regionId]);
+
   const completeRegionSetup = (selectedRegion: RegionOption) => {
+    onRegionChange?.(selectedRegion.regionId);
     saveRegion(selectedRegion.regionId, validRegionIds);
     setRegion(selectedRegion);
     setView('today');
   };
 
   const clearLocalRegion = () => {
+    onRegionChange?.(null);
     clearSavedRegion();
     setRegion(null);
     setView('home');
   };
+
+  const requiresRules = Boolean(region && view !== 'home' && view !== 'setup');
 
   return (
     <main className="app-shell">
@@ -809,7 +854,14 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
 
       {view === 'home' && <HomeView onStart={() => setView('setup')} />}
       {view === 'setup' && <RegionSetupView regions={regions} onComplete={completeRegionSetup} />}
-      {view === 'today' && region && (
+      {requiresRules && regionDataStatus !== 'ready' && region && (
+        <RegionDataStateView
+          region={region}
+          status={regionDataStatus}
+          onChangeRegion={() => setView('setup')}
+        />
+      )}
+      {view === 'today' && region && regionDataStatus === 'ready' && (
         <TodayView
           region={region}
           rules={rules}
@@ -819,7 +871,7 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           onChangeRegion={() => setView('setup')}
         />
       )}
-      {view === 'weekly' && region && (
+      {view === 'weekly' && region && regionDataStatus === 'ready' && (
         <WeeklyView
           region={region}
           rules={rules}
@@ -828,7 +880,7 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           onChangeRegion={() => setView('setup')}
         />
       )}
-      {view === 'search' && region && (
+      {view === 'search' && region && regionDataStatus === 'ready' && (
         <SearchView
           region={region}
           rules={rules}
@@ -838,7 +890,7 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           onChangeRegion={() => setView('setup')}
         />
       )}
-      {view === 'bulk' && region && (
+      {view === 'bulk' && region && regionDataStatus === 'ready' && (
         <BulkDisposalView
           region={region}
           rules={rules}
@@ -847,7 +899,7 @@ export default function App({ regions = EMPTY_REGIONS, rules = EMPTY_RULES, data
           onChangeRegion={() => setView('setup')}
         />
       )}
-      {view === 'settings' && region && (
+      {view === 'settings' && region && regionDataStatus === 'ready' && (
         <SettingsView
           region={region}
           rules={rules}
