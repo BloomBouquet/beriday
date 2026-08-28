@@ -45,9 +45,16 @@ function compareIds(left: string, right: string): number {
 
 function shardKey(regionId: string): string {
   const bytes = new TextEncoder().encode(regionId);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '');
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+
+  for (const byte of bytes) {
+    hash ^= BigInt(byte);
+    hash = (hash * prime) & mask;
+  }
+
+  return hash.toString(16).padStart(16, '0');
 }
 
 function sourceCount(value: unknown): number | null {
