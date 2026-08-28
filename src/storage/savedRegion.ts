@@ -9,13 +9,27 @@ export type StorageLike = {
   removeItem(key: string): void;
 };
 
+export type SavedRegionListener = (saved: SavedRegion | null) => void;
+
 const KEY = 'beriday:saved-region:v1';
+const listeners = new Set<SavedRegionListener>();
 
 function defaultStorage(): StorageLike {
   if (typeof globalThis.localStorage === 'undefined') {
     throw new Error('LocalStorage is unavailable in this runtime');
   }
   return globalThis.localStorage;
+}
+
+function notifySavedRegionChanged(saved: SavedRegion | null): void {
+  for (const listener of listeners) listener(saved);
+}
+
+export function subscribeSavedRegionChanges(listener: SavedRegionListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function getSavedRegion(validRegionIds: Set<string>, storage: StorageLike = defaultStorage()): SavedRegion | null {
@@ -52,9 +66,11 @@ export function saveRegion(
   if (!validRegionIds.has(regionId)) throw new Error(`Unknown region id: ${regionId}`);
   const saved = { regionId, savedAt: now.toISOString() };
   storage.setItem(KEY, JSON.stringify(saved));
+  notifySavedRegionChanged(saved);
   return saved;
 }
 
 export function clearSavedRegion(storage: StorageLike = defaultStorage()): void {
   storage.removeItem(KEY);
+  notifySavedRegionChanged(null);
 }
