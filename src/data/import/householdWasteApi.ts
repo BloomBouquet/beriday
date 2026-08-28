@@ -75,7 +75,7 @@ export function parseOfficialHouseholdWasteApiPage(payload: unknown): OfficialHo
   const response = asRecord(root.response, 'response');
   const header = asRecord(response.header, 'header');
   const resultCode = asString(header, 'resultCode');
-  if (resultCode !== '00') {
+  if (resultCode !== '00' && resultCode !== '0') {
     throw new Error(`Official Open API returned resultCode ${resultCode || 'unknown'}`);
   }
 
