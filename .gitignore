@@ -6,6 +6,7 @@ playwright-report/
 test-results/
 data/raw/*
 !data/raw/.gitkeep
+public/data/runtime/
 .env
 .env.*
 !.env.example
