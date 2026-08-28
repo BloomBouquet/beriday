@@ -100,6 +100,7 @@ test('keeps parseable schedules but marks them ambiguous when no-collection text
   assert.equal(result.rules.length, 3);
   assert.ok(result.rules.every((rule) => rule.confidence === 'ambiguous'));
   assert.ok(result.rules.every((rule) => rule.excludedDates.length === 0));
+  assert.equal(result.normalizationReport.ambiguousRows, 1);
   assert.equal(result.adapterReport.skippedSourceRows, 0);
   assert.deepEqual(result.adapterReport.errors, [
     {
