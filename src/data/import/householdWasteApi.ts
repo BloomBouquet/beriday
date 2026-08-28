@@ -55,6 +55,21 @@ function parseTargetAreaNames(value: string): string[] {
   return value.split('+').map((name) => name.trim()).filter(Boolean);
 }
 
+function formatFetchFailure(error: unknown, serviceKey: string): string {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const encodedServiceKey = encodeURIComponent(serviceKey);
+  const safeMessage = rawMessage
+    .replaceAll(serviceKey, '[redacted]')
+    .replaceAll(encodedServiceKey, '[redacted]');
+
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code = cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string'
+    ? cause.code
+    : null;
+
+  return `Official Open API request failed: ${safeMessage}${code ? ` (${code})` : ''}`;
+}
+
 export function parseOfficialHouseholdWasteApiPage(payload: unknown): OfficialHouseholdWasteApiPage {
   const root = asRecord(payload, 'response envelope');
   const response = asRecord(root.response, 'response');
@@ -167,7 +182,13 @@ export async function fetchOfficialHouseholdWasteApiRows({
     url.searchParams.set('numOfRows', String(pageSize));
     url.searchParams.set('returnType', 'json');
 
-    const response = await fetchImpl(url.toString());
+    let response: FetchResponseLike;
+    try {
+      response = await fetchImpl(url.toString());
+    } catch (error) {
+      throw new Error(formatFetchFailure(error, serviceKey));
+    }
+
     if (!response.ok) {
       throw new Error(`Official Open API request failed with HTTP ${response.status}`);
     }
