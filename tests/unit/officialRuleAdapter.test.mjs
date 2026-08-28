@@ -91,9 +91,56 @@ test('keeps malformed category schedules out and reports the original CSV source
   ));
 });
 
+test('treats explicit no-exclusion markers as verified empty exclusions', () => {
+  for (const noCollectionDays of ['없음', '-', '해당없음']) {
+    const result = adaptOfficialRowsToCollectionRules([
+      sourceRow({ sourceRow: 10, targetAreaNames: ['일곡동'], noCollectionDays }),
+    ], importedAt);
+
+    assert.equal(result.rules.length, 3);
+    assert.ok(result.rules.every((rule) => rule.confidence === 'verified'));
+    assert.ok(result.rules.every((rule) => rule.excludedDates.length === 0));
+    assert.equal(result.normalizationReport.ambiguousRows, 0);
+    assert.deepEqual(result.adapterReport.errors, []);
+  }
+});
+
+test('keeps recurring no-collection weekdays verified when they do not overlap collection weekdays', () => {
+  const result = adaptOfficialRowsToCollectionRules([
+    sourceRow({ sourceRow: 11, targetAreaNames: ['일곡동'], noCollectionDays: '토+일' }),
+  ], importedAt);
+
+  assert.equal(result.rules.length, 3);
+  assert.ok(result.rules.every((rule) => rule.confidence === 'verified'));
+  assert.ok(result.rules.every((rule) => rule.excludedDates.length === 0));
+  assert.equal(result.normalizationReport.ambiguousRows, 0);
+  assert.deepEqual(result.adapterReport.errors, []);
+});
+
+test('marks only overlapping category rules ambiguous for recurring no-collection weekdays', () => {
+  const result = adaptOfficialRowsToCollectionRules([
+    sourceRow({ sourceRow: 12, targetAreaNames: ['일곡동'], noCollectionDays: '수요일' }),
+  ], importedAt);
+
+  assert.equal(result.rules.length, 3);
+  const byCategory = Object.fromEntries(result.rules.map((rule) => [rule.category, rule]));
+  assert.equal(byCategory.general.confidence, 'ambiguous');
+  assert.equal(byCategory.food.confidence, 'verified');
+  assert.equal(byCategory.recycling.confidence, 'ambiguous');
+  assert.ok(result.rules.every((rule) => rule.excludedDates.length === 0));
+  assert.equal(result.normalizationReport.ambiguousRows, 1);
+  assert.deepEqual(result.adapterReport.errors, [
+    {
+      row: 12,
+      code: 'unsupported-no-collection-days',
+      message: 'Cannot safely apply recurring 미수거일 weekdays to overlapping schedules: 수요일',
+    },
+  ]);
+});
+
 test('keeps parseable schedules but marks them ambiguous when no-collection text is not concrete dates', () => {
   const result = adaptOfficialRowsToCollectionRules([
-    sourceRow({ sourceRow: 11, targetAreaNames: ['일곡동'], noCollectionDays: '명절+임시공휴일' }),
+    sourceRow({ sourceRow: 13, targetAreaNames: ['일곡동'], noCollectionDays: '명절+임시공휴일' }),
   ], importedAt);
 
   assert.equal(result.regions.length, 1);
@@ -104,7 +151,7 @@ test('keeps parseable schedules but marks them ambiguous when no-collection text
   assert.equal(result.adapterReport.skippedSourceRows, 0);
   assert.deepEqual(result.adapterReport.errors, [
     {
-      row: 11,
+      row: 13,
       code: 'unsupported-no-collection-days',
       message: 'Cannot safely convert 미수거일 to concrete excluded dates: 명절+임시공휴일',
     },
