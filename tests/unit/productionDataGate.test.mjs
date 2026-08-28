@@ -95,6 +95,21 @@ test('rejects production data when validation contains critical errors', () => {
   );
 });
 
+test('rejects a forged clean report when the deployable bundle recomputes critical errors', () => {
+  const bundle = makeBundle();
+  const report = makeReport();
+  bundle.regions = [];
+  bundle.rules = [];
+  report.coveredRegions = 0;
+  report.rules = 0;
+  report.sourceUpdatedAt = null;
+
+  assert.throws(
+    () => verifyProductionDataPair(bundle, report),
+    /recomputed critical error/,
+  );
+});
+
 test('rejects count drift between the deployable bundle and validation report', () => {
   const report = makeReport();
   report.rules = 2;
