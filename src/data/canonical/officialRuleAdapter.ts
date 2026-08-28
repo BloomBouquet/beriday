@@ -66,18 +66,17 @@ export function adaptOfficialRowsToCollectionRules(
   const selectableRegionIds = new Set(mapping.regions.map((region) => region.id));
   const rawRows = [];
   const errors: OfficialRuleAdapterError[] = [];
-  const skippedSourceRows = new Set<number>();
+  const ambiguousNoCollectionSourceIds = new Set<string>();
 
   for (const row of rows) {
     const noCollectionDays = normalizeConcreteNoCollectionDays(row.noCollectionDays);
     if (!noCollectionDays.supported) {
-      skippedSourceRows.add(row.sourceRow);
+      ambiguousNoCollectionSourceIds.add(`household-waste:${row.sourceRow}`);
       errors.push({
         row: row.sourceRow,
         code: 'unsupported-no-collection-days',
         message: `Cannot safely convert 미수거일 to concrete excluded dates: ${row.noCollectionDays}`,
       });
-      continue;
     }
 
     const targetAreaNames = [...new Set(row.targetAreaNames.map((name) => name.trim()).filter(Boolean))];
@@ -108,16 +107,29 @@ export function adaptOfficialRowsToCollectionRules(
   }
 
   const normalized = normalizeRows(rawRows, importedAt);
+  const rules = normalized.rules.map((rule) => (
+    ambiguousNoCollectionSourceIds.has(rule.provenance.sourceId)
+      ? { ...rule, confidence: 'ambiguous' as const }
+      : rule
+  ));
+  const ambiguousRows = new Set(
+    rules
+      .filter((rule) => rule.confidence === 'ambiguous')
+      .map((rule) => rule.provenance.sourceId),
+  ).size;
 
   return {
     regions: mapping.regions,
-    rules: normalized.rules,
+    rules,
     mappingReport: mapping.report,
-    normalizationReport: normalized.report,
+    normalizationReport: {
+      ...normalized.report,
+      ambiguousRows,
+    },
     adapterReport: {
       sourceRows: rows.length,
       expandedRows: rawRows.length,
-      skippedSourceRows: skippedSourceRows.size,
+      skippedSourceRows: 0,
       errors,
     },
   };

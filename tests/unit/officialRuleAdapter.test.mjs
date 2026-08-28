@@ -91,14 +91,17 @@ test('keeps malformed category schedules out and reports the original CSV source
   ));
 });
 
-test('blocks schedule generation when no-collection text cannot be represented as concrete dates', () => {
+test('keeps parseable schedules but marks them ambiguous when no-collection text is not concrete dates', () => {
   const result = adaptOfficialRowsToCollectionRules([
     sourceRow({ sourceRow: 11, targetAreaNames: ['일곡동'], noCollectionDays: '명절+임시공휴일' }),
   ], importedAt);
 
   assert.equal(result.regions.length, 1);
-  assert.deepEqual(result.rules, []);
-  assert.equal(result.adapterReport.skippedSourceRows, 1);
+  assert.equal(result.rules.length, 3);
+  assert.ok(result.rules.every((rule) => rule.confidence === 'ambiguous'));
+  assert.ok(result.rules.every((rule) => rule.excludedDates.length === 0));
+  assert.equal(result.normalizationReport.ambiguousRows, 1);
+  assert.equal(result.adapterReport.skippedSourceRows, 0);
   assert.deepEqual(result.adapterReport.errors, [
     {
       row: 11,
