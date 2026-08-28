@@ -8,10 +8,10 @@ test('production build is rooted at the BloomBouquet Beriday subpath', () => {
   assert.match(viteConfig, /base:\s*['"]\/apps\/beriday\/['"]/);
 });
 
-test('default runtime manifest URL follows the Vite base instead of the domain root', () => {
-  const loader = fs.readFileSync('src/data/runtime/officialRuntimeLoader.ts', 'utf8');
+test('default runtime manifest URL follows the Vite app base instead of the domain root', () => {
+  const app = fs.readFileSync('src/OfficialDataApp.tsx', 'utf8');
 
-  assert.match(loader, /import\.meta\.env\.BASE_URL/);
-  assert.doesNotMatch(loader, /const DEFAULT_MANIFEST_URL = ['"]\/data\/runtime\/manifest\.json['"]/);
-  assert.match(loader, /data\/runtime\/manifest\.json/);
+  assert.match(app, /import\.meta\.env\.BASE_URL/);
+  assert.doesNotMatch(app, /const DEFAULT_MANIFEST_URL = ['"]\/data\/runtime\/manifest\.json['"]/);
+  assert.match(app, /data\/runtime\/manifest\.json/);
 });
