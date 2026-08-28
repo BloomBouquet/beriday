@@ -58,6 +58,7 @@
 - 공식 CSV 파일을 deterministic JSON asset으로 만드는 CLI build command
 - 공식 Open API를 pagination으로 수집해 production asset과 별도 validation summary를 함께 생성하는 CLI command
 - validation summary에서 selectable region/rule이 0건이면 critical error로 처리해 output 갱신 차단
+- production asset/report pair의 timestamp, count, source 기준일, warning을 bundle에서 재계산해 검증하는 배포 preflight
 - 수동 GitHub Actions refresh가 검증 성공 데이터만 별도 data branch와 PR로 생성
 - CLI/API validation 실패 시 기존 output 보존
 - 브라우저 시작 시 `/data/official-data.json`을 read-only로 로드하고 schema v1 검증 후 지역/rule을 앱에 주입
@@ -124,16 +125,30 @@ $env:DATA_GO_KR_API_KEY='<공공데이터포털 인증키>'
 - `npm run build`는 네트워크를 호출하지 않고 마지막으로 검증된 asset만 사용합니다. 공공 API 장애가 application build를 깨뜨리지 않도록 refresh와 build를 분리합니다.
 - 실제 refresh를 실행하는 환경에는 `DATA_GO_KR_API_KEY`를 secret 또는 환경변수로 주입해야 합니다.
 
+### 프로덕션 데이터 배포 전 검증
+
+공식 asset과 validation report가 생성된 뒤에는 아래 명령으로 두 파일이 같은 refresh 결과인지 다시 검증합니다.
+
+```bash
+npm run verify:production-data
+```
+
+- `official-data.json`을 다시 읽어 validation summary 기대값을 계산합니다.
+- asset/report의 `importedAt`, source/accepted/rejected/ambiguous row 수, selectable region 수, rule 수, source 기준일, warning 목록을 대조합니다.
+- validation report에 critical error가 있거나 어느 값이라도 어긋나면 즉시 실패합니다.
+- 호스팅 공급자와 무관한 preflight이므로 production 배포 직전에 같은 명령을 재사용할 수 있습니다.
+
 ### GitHub Actions 수동 refresh
 
 `.github/workflows/refresh-official-data.yml`은 `workflow_dispatch`로만 실행합니다.
 
 - 저장소 Actions secret `DATA_GO_KR_API_KEY`를 사용하며 로그나 PR에 인증키를 기록하지 않습니다.
 - UTC import timestamp를 명시적으로 생성해 refresh CLI에 전달합니다.
-- refresh 후 Domain/UI/typecheck/production build를 다시 검증합니다.
+- refresh 직후 `npm run verify:production-data`로 asset/report pair를 검증합니다.
+- 그 다음 Domain/UI/typecheck/production build를 다시 검증합니다.
 - 생성된 `official-data.json`과 validation report를 workflow artifact로 보존합니다.
 - 모든 검증이 성공한 경우에만 `data/official-refresh-<run id>` 브랜치를 만들고 정해진 PR 형식으로 `main` 대상 PR을 생성합니다.
-- validation critical error, API 오류, 테스트 실패가 발생하면 data branch와 PR을 생성하지 않습니다.
+- validation critical error, asset/report mismatch, API 오류, 테스트 실패가 발생하면 data branch와 PR을 생성하지 않습니다.
 
 ## 브라우저 데이터 로딩
 
