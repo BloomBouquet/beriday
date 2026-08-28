@@ -56,7 +56,9 @@
 - production bundle을 2-space pretty JSON + 단일 trailing newline 형식으로 deterministic 직렬화
 - JSON asset loader에서 malformed JSON, 지원하지 않는 schema version, 필수 top-level shape를 fail-fast 검증
 - 공식 CSV 파일을 deterministic JSON asset으로 만드는 CLI build command
-- 공식 Open API를 pagination으로 수집해 production asset을 갱신하는 CLI command
+- 공식 Open API를 pagination으로 수집해 production asset과 별도 validation summary를 함께 생성하는 CLI command
+- validation summary에서 selectable region/rule이 0건이면 critical error로 처리해 output 갱신 차단
+- 수동 GitHub Actions refresh가 검증 성공 데이터만 별도 data branch와 PR로 생성
 - CLI/API validation 실패 시 기존 output 보존
 - 브라우저 시작 시 `/data/official-data.json`을 read-only로 로드하고 schema v1 검증 후 지역/rule을 앱에 주입
 - 공식 asset HTTP 오류 또는 malformed JSON이면 fallback 없이 `데이터를 불러오지 못했습니다.` 상태로 fail-closed
@@ -99,6 +101,7 @@ export DATA_GO_KR_API_KEY='<공공데이터포털 인증키>'
 
 npm run refresh:official-data -- \
   --output ./public/data/official-data.json \
+  --report-output ./data/reports/official-data-validation.json \
   --imported-at 2026-08-28T00:00:00.000Z
 ```
 
@@ -108,14 +111,29 @@ PowerShell에서는 다음처럼 설정할 수 있습니다.
 $env:DATA_GO_KR_API_KEY='<공공데이터포털 인증키>'
 ```
 
+- `--output`, `--report-output`, `--imported-at`은 모두 필수입니다.
+- deployable asset과 validation report는 서로 다른 경로를 사용해야 합니다.
 - API의 `totalCount`를 기준으로 필요한 모든 page를 순차 수집합니다.
 - 필수 지역 키가 비어 있는 source row는 제외하고 source validation report에 기록합니다.
 - 제외된 row가 있어도 page 진행 여부는 accepted row 수가 아니라 실제 처리한 source row 수로 판단합니다.
 - `totalCount`가 남아 있는데 빈 page가 반환되면 무한 pagination 대신 refresh를 실패 처리합니다.
 - API source row는 CSV와 동일한 canonical mapping → rule adapter → serializer 경로를 사용합니다.
-- 전체 수집·검증·bundle 생성이 성공한 뒤에만 임시 파일을 최종 output으로 교체합니다.
+- validation summary에는 source/accepted/rejected row 수, ambiguous row 수, selectable region 수, rule 수, 최신 source 기준일, warning/critical error를 기록합니다.
+- selectable region 또는 rule이 0건이면 critical error로 처리하며 asset/report를 갱신하지 않습니다.
+- 전체 수집·검증·bundle 생성이 성공한 뒤에만 asset과 validation report를 최종 경로로 이동합니다.
 - `npm run build`는 네트워크를 호출하지 않고 마지막으로 검증된 asset만 사용합니다. 공공 API 장애가 application build를 깨뜨리지 않도록 refresh와 build를 분리합니다.
 - 실제 refresh를 실행하는 환경에는 `DATA_GO_KR_API_KEY`를 secret 또는 환경변수로 주입해야 합니다.
+
+### GitHub Actions 수동 refresh
+
+`.github/workflows/refresh-official-data.yml`은 `workflow_dispatch`로만 실행합니다.
+
+- 저장소 Actions secret `DATA_GO_KR_API_KEY`를 사용하며 로그나 PR에 인증키를 기록하지 않습니다.
+- UTC import timestamp를 명시적으로 생성해 refresh CLI에 전달합니다.
+- refresh 후 Domain/UI/typecheck/production build를 다시 검증합니다.
+- 생성된 `official-data.json`과 validation report를 workflow artifact로 보존합니다.
+- 모든 검증이 성공한 경우에만 `data/official-refresh-<run id>` 브랜치를 만들고 정해진 PR 형식으로 `main` 대상 PR을 생성합니다.
+- validation critical error, API 오류, 테스트 실패가 발생하면 data branch와 PR을 생성하지 않습니다.
 
 ## 브라우저 데이터 로딩
 
