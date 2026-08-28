@@ -52,9 +52,10 @@ jobs:
         run: |
           node - <<'NODE'
           const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
           const report = JSON.parse(fs.readFileSync('data/reports/official-data-validation.json', 'utf8'));
           const metadata = {
-            commitSha: process.env.GITHUB_SHA,
+            commitSha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
             importedAt: report.importedAt,
             sourceUpdatedAt: report.sourceUpdatedAt,
             coveredRegions: report.coveredRegions,
@@ -66,7 +67,7 @@ jobs:
       - name: Upload production release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: beriday-production-${{ github.sha }}
+          name: beriday-production-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 14
           path: |
