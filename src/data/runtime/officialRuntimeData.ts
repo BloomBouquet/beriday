@@ -434,6 +434,7 @@ export function verifyOfficialRuntimeData(
 
   for (const shardId of manifestShardIds) {
     const metadata = manifest.shards[shardId];
+    if (!metadata) throw new Error(`Runtime shard metadata is missing: ${shardId}`);
     const shard = shards[shardId];
     if (!shard) throw new Error(`Runtime shard is missing: ${shardId}`);
     if (shard.shardId !== shardId) throw new Error(`Runtime shard id mismatch: ${shardId}`);
