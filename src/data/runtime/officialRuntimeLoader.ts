@@ -1,10 +1,10 @@
-import type { CollectionRule } from '../../domain/waste/types';
+import type { CollectionRule } from '../../domain/waste/types.js';
 import {
   loadOfficialRuntimeManifest,
   loadOfficialRuntimeShard,
   type OfficialRuntimeManifest,
   type OfficialRuntimeShard,
-} from './officialRuntimeData';
+} from './officialRuntimeData.js';
 
 const DEFAULT_MANIFEST_URL = '/data/runtime/manifest.json';
 
