@@ -164,10 +164,11 @@ test('fails verification when runtime timestamps or source summary drift', () =>
   assert.throws(() => verifyOfficialRuntimeData(canonical, sourceUpdatedAt, sourceDrift), /source summary/i);
 });
 
-test('fails verification when a manifest region references an unknown shard', () => {
+test('fails verification when a manifest region references missing shard metadata', () => {
   const canonical = bundle();
   const runtime = buildOfficialRuntimeData(canonical, sourceUpdatedAt);
-  runtime.manifest.regions[0].shardId = 'municipality-deadbeef';
+  const shardId = runtime.manifest.regions[0].shardId;
+  delete runtime.manifest.shards[shardId];
 
   assert.throws(
     () => verifyOfficialRuntimeData(canonical, sourceUpdatedAt, runtime),
