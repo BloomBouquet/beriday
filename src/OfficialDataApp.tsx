@@ -1,36 +1,45 @@
-import { useEffect, useState } from 'react';
-import App, { type DataVerificationSummary, type RegionOption } from './App';
-import { loadOfficialDataAsset } from './data/canonical/officialDataAsset';
-import type { OfficialDataBundle } from './data/canonical/officialDataBundle';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import App, {
+  type DataVerificationSummary,
+  type RegionDataStatus,
+  type RegionOption,
+} from './App';
+import type { CollectionRule } from './domain/waste/types';
+import { createOfficialRuntimeLoader } from './data/runtime/officialRuntimeLoader';
+import type { OfficialRuntimeManifest } from './data/runtime/officialRuntimeData';
 
-const DEFAULT_DATA_URL = '/data/official-data.json';
+const DEFAULT_MANIFEST_URL = '/data/runtime/manifest.json';
 
 type OfficialDataAppProps = {
-  dataUrl?: string;
+  manifestUrl?: string;
 };
 
-type LoadState =
+type ManifestState =
   | { status: 'loading' }
-  | { status: 'ready'; bundle: OfficialDataBundle }
+  | { status: 'ready'; manifest: OfficialRuntimeManifest }
   | { status: 'error' };
 
-function toRegionOptions(bundle: OfficialDataBundle): RegionOption[] {
-  return bundle.regions.map((region) => ({
-    regionId: region.id,
+type RuleState =
+  | { status: 'idle'; regionId: null; rules: readonly CollectionRule[] }
+  | { status: 'loading'; regionId: string; rules: readonly CollectionRule[] }
+  | { status: 'ready'; regionId: string; rules: readonly CollectionRule[] }
+  | { status: 'error'; regionId: string; rules: readonly CollectionRule[] };
+
+function toRegionOptions(manifest: OfficialRuntimeManifest): RegionOption[] {
+  return manifest.regions.map((region) => ({
+    regionId: region.regionId,
     sido: region.sido,
     sigungu: region.sigungu,
     areaName: region.areaName,
   }));
 }
 
-function toDataVerificationSummary(bundle: OfficialDataBundle): DataVerificationSummary {
-  const source = bundle.reports?.source;
-
+function toDataVerificationSummary(manifest: OfficialRuntimeManifest): DataVerificationSummary {
   return {
-    importedAt: bundle.importedAt,
-    totalRows: typeof source?.totalRows === 'number' ? source.totalRows : null,
-    acceptedRows: typeof source?.acceptedRows === 'number' ? source.acceptedRows : null,
-    rejectedRows: typeof source?.rejectedRows === 'number' ? source.rejectedRows : null,
+    importedAt: manifest.importedAt,
+    totalRows: manifest.source.totalRows,
+    acceptedRows: manifest.source.acceptedRows,
+    rejectedRows: manifest.source.rejectedRows,
   };
 }
 
@@ -55,34 +64,66 @@ function DataStateView({ title, message }: { title: string; message: string }) {
   );
 }
 
-export default function OfficialDataApp({ dataUrl = DEFAULT_DATA_URL }: OfficialDataAppProps) {
-  const [state, setState] = useState<LoadState>({ status: 'loading' });
+export default function OfficialDataApp({
+  manifestUrl = DEFAULT_MANIFEST_URL,
+}: OfficialDataAppProps) {
+  const loader = useMemo(
+    () => createOfficialRuntimeLoader({ manifestUrl }),
+    [manifestUrl],
+  );
+  const [manifestState, setManifestState] = useState<ManifestState>({ status: 'loading' });
+  const [ruleState, setRuleState] = useState<RuleState>({
+    status: 'idle',
+    regionId: null,
+    rules: [],
+  });
+  const requestVersion = useRef(0);
+  const requestedRegionId = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    requestVersion.current += 1;
+    requestedRegionId.current = null;
+    setManifestState({ status: 'loading' });
+    setRuleState({ status: 'idle', regionId: null, rules: [] });
 
-    const load = async () => {
-      try {
-        const response = await fetch(dataUrl, { cache: 'no-cache' });
-        if (!response.ok) {
-          throw new Error(`Official data request failed: ${response.status}`);
-        }
-
-        const bundle = loadOfficialDataAsset(await response.text());
-        if (active) setState({ status: 'ready', bundle });
-      } catch {
-        if (active) setState({ status: 'error' });
-      }
-    };
-
-    void load();
+    void loader.loadManifest()
+      .then((manifest) => {
+        if (active) setManifestState({ status: 'ready', manifest });
+      })
+      .catch(() => {
+        if (active) setManifestState({ status: 'error' });
+      });
 
     return () => {
       active = false;
+      requestVersion.current += 1;
     };
-  }, [dataUrl]);
+  }, [loader]);
 
-  if (state.status === 'loading') {
+  const handleRegionChange = useCallback((regionId: string | null) => {
+    if (requestedRegionId.current === regionId) return;
+    requestedRegionId.current = regionId;
+    const version = ++requestVersion.current;
+
+    if (!regionId) {
+      setRuleState({ status: 'idle', regionId: null, rules: [] });
+      return;
+    }
+
+    setRuleState({ status: 'loading', regionId, rules: [] });
+    void loader.loadRulesForRegion(regionId)
+      .then((rules) => {
+        if (requestVersion.current !== version) return;
+        setRuleState({ status: 'ready', regionId, rules });
+      })
+      .catch(() => {
+        if (requestVersion.current !== version) return;
+        setRuleState({ status: 'error', regionId, rules: [] });
+      });
+  }, [loader]);
+
+  if (manifestState.status === 'loading') {
     return (
       <DataStateView
         title="공식 데이터를 불러오는 중입니다."
@@ -91,7 +132,7 @@ export default function OfficialDataApp({ dataUrl = DEFAULT_DATA_URL }: Official
     );
   }
 
-  if (state.status === 'error') {
+  if (manifestState.status === 'error') {
     return (
       <DataStateView
         title="데이터를 불러오지 못했습니다."
@@ -100,11 +141,16 @@ export default function OfficialDataApp({ dataUrl = DEFAULT_DATA_URL }: Official
     );
   }
 
+  const manifest = manifestState.manifest;
+  const regionDataStatus: RegionDataStatus = ruleState.status;
+
   return (
     <App
-      regions={toRegionOptions(state.bundle)}
-      rules={state.bundle.rules}
-      dataSummary={toDataVerificationSummary(state.bundle)}
+      regions={toRegionOptions(manifest)}
+      rules={ruleState.rules}
+      dataSummary={toDataVerificationSummary(manifest)}
+      onRegionChange={handleRegionChange}
+      regionDataStatus={regionDataStatus}
     />
   );
 }

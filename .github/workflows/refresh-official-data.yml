@@ -46,6 +46,11 @@ jobs:
       - name: Verify production data pair
         run: npm run verify:production-data
 
+      - name: Generate and verify runtime data shards
+        run: |
+          npm run build:runtime-data
+          npm run verify:runtime-data
+
       - name: Run repository verification
         run: |
           npm run test:domain
