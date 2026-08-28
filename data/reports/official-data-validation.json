@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "importedAt": "2026-08-28T03:31:35.000Z",
+  "importedAt": "2026-08-28T04:39:01.000Z",
   "sourceUpdatedAt": "2026-07-14",
   "sourceRows": 10187,
   "acceptedRows": 10187,
   "rejectedRows": 0,
-  "ambiguousRows": 9545,
+  "ambiguousRows": 8771,
   "coveredRegions": 4120,
   "rules": 34090,
   "criticalErrors": [],
   "warnings": [
     "485 target area row(s) were unresolved.",
     "96 target area(s) were ambiguous.",
-    "9545 normalized source row(s) are ambiguous.",
+    "8771 normalized source row(s) are ambiguous.",
     "767 normalization error(s) were recorded."
   ]
 }
