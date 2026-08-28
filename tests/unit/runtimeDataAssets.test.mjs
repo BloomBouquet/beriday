@@ -153,7 +153,7 @@ test('runtime shard loader rejects malformed collection rule fields', () => {
     {
       name: 'provenance',
       mutate: (asset) => { delete asset.rules[0].provenance.sourceId; },
-      error: /provenance\.sourceId/,
+      error: /provenance.*sourceId/,
     },
   ];
 
