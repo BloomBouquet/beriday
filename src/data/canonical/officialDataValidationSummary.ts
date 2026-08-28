@@ -20,7 +20,7 @@ function latestSourceUpdatedAt(bundle: OfficialDataBundle): string | null {
     .filter((value): value is string => Boolean(value))
     .sort();
 
-  return dates.length > 0 ? dates[dates.length - 1] : null;
+  return dates[dates.length - 1] ?? null;
 }
 
 export function buildOfficialDataValidationSummary(
