@@ -6,7 +6,7 @@ import {
   type OfficialRuntimeShard,
 } from './officialRuntimeData.js';
 
-const DEFAULT_MANIFEST_URL = '/data/runtime/manifest.json';
+const DEFAULT_MANIFEST_URL = `${import.meta.env.BASE_URL}data/runtime/manifest.json`;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
