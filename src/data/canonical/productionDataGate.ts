@@ -30,6 +30,10 @@ export function verifyProductionDataPair(
 
   const expected = buildOfficialDataValidationSummary(bundle);
 
+  if (expected.criticalErrors.length > 0) {
+    mismatch(`recomputed critical error(s): ${expected.criticalErrors.join(' ')}`);
+  }
+
   if (report.importedAt !== bundle.importedAt) {
     mismatch('validation importedAt does not match deployable asset');
   }
