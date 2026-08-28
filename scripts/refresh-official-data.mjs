@@ -1,5 +1,6 @@
 import { buildOfficialDataBundleFromRows } from '../dist-tests/src/data/canonical/officialDataBundle.js';
 import { serializeOfficialDataAsset } from '../dist-tests/src/data/canonical/officialDataAsset.js';
+import { buildOfficialDataFailureDiagnostics } from '../dist-tests/src/data/canonical/officialDataFailureDiagnostics.js';
 import {
   buildOfficialDataValidationSummary,
   serializeOfficialDataValidationSummary,
@@ -48,6 +49,7 @@ if (!options.output || !options.reportOutput || !options.importedAt) {
     const summary = buildOfficialDataValidationSummary(bundle);
 
     if (summary.criticalErrors.length > 0) {
+      console.error(`Official data validation diagnostics: ${JSON.stringify(buildOfficialDataFailureDiagnostics(bundle))}`);
       throw new Error(`Official data validation failed: ${summary.criticalErrors.join(' ')}`);
     }
 
