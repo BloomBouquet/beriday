@@ -100,3 +100,40 @@ test('builds a lightweight manifest and one deterministic shard per region', () 
   assert.ok(seoulShard);
   assert.deepEqual(seoulShard.asset.rules.map((item) => item.id), ['seoul-general']);
 });
+
+test('serializes and loads runtime manifest and shard assets deterministically', () => {
+  assert.equal(typeof runtimeDataAssets?.serializeOfficialRuntimeManifest, 'function');
+  assert.equal(typeof runtimeDataAssets?.serializeOfficialRuntimeShard, 'function');
+  assert.equal(typeof runtimeDataAssets?.loadOfficialRuntimeManifest, 'function');
+  assert.equal(typeof runtimeDataAssets?.loadOfficialRuntimeShard, 'function');
+
+  const result = runtimeDataAssets.buildOfficialRuntimeAssets(bundle);
+  const manifestText = runtimeDataAssets.serializeOfficialRuntimeManifest(result.manifest);
+  const shardText = runtimeDataAssets.serializeOfficialRuntimeShard(result.shards[0].asset);
+
+  assert.ok(manifestText.endsWith('\n'));
+  assert.ok(shardText.endsWith('\n'));
+  assert.deepEqual(runtimeDataAssets.loadOfficialRuntimeManifest(manifestText), result.manifest);
+  assert.deepEqual(runtimeDataAssets.loadOfficialRuntimeShard(shardText, result.shards[0].asset.regionId), result.shards[0].asset);
+});
+
+test('runtime shard loader rejects a shard for a different region', () => {
+  assert.equal(typeof runtimeDataAssets?.loadOfficialRuntimeShard, 'function');
+
+  const result = runtimeDataAssets.buildOfficialRuntimeAssets(bundle);
+  const shardText = JSON.stringify(result.shards[0].asset);
+
+  assert.throws(
+    () => runtimeDataAssets.loadOfficialRuntimeShard(shardText, '서울특별시/강남구/역삼동'),
+    /Runtime shard region mismatch/,
+  );
+});
+
+test('runtime manifest loader rejects unsupported schema versions', () => {
+  assert.equal(typeof runtimeDataAssets?.loadOfficialRuntimeManifest, 'function');
+
+  assert.throws(
+    () => runtimeDataAssets.loadOfficialRuntimeManifest(JSON.stringify({ schemaVersion: 99 })),
+    /Unsupported official runtime manifest schemaVersion/,
+  );
+});
