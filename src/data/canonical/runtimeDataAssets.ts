@@ -35,6 +35,9 @@ export type OfficialRuntimeAssets = {
   shards: OfficialRuntimeShardFile[];
 };
 
+const WASTE_CATEGORIES = new Set(['general', 'food', 'recycling', 'bulk', 'other']);
+const RULE_CONFIDENCE = new Set(['verified', 'ambiguous']);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -77,6 +80,23 @@ function requireString(record: Record<string, unknown>, field: string, label: st
   return value;
 }
 
+function requireNullableString(record: Record<string, unknown>, field: string, label: string): string | null {
+  const value = record[field];
+  if (value === null) return null;
+  if (typeof value !== 'string') {
+    throw new Error(`Invalid official runtime ${label}: ${field} must be a string or null`);
+  }
+  return value;
+}
+
+function requireStringArray(record: Record<string, unknown>, field: string, label: string): string[] {
+  const value = record[field];
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+    throw new Error(`Invalid official runtime ${label}: ${field} must be a string array`);
+  }
+  return value;
+}
+
 function requireNullableCount(record: Record<string, unknown>, field: string): number | null {
   const value = record[field];
   if (value === null) return null;
@@ -92,6 +112,93 @@ function requireCount(record: Record<string, unknown>, field: string): number {
     throw new Error(`Invalid official runtime manifest: summary.${field} must be a non-negative integer`);
   }
   return value;
+}
+
+function isValidTime(value: unknown): value is string | null {
+  if (value === null) return true;
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{2}):(\d{2})$/u.exec(value);
+  if (!match) return false;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
+
+function validateRuntimeRule(value: unknown, regionId: string, importedAt: string): CollectionRule {
+  if (!isRecord(value)) {
+    throw new Error('Invalid official runtime shard rule: rule must be an object');
+  }
+
+  const id = requireString(value, 'id', 'shard rule');
+  const ruleRegionId = requireString(value, 'regionId', 'shard rule');
+  if (ruleRegionId !== regionId) {
+    throw new Error(`Runtime shard rule region mismatch: expected ${regionId}, received ${ruleRegionId}`);
+  }
+
+  const category = value.category;
+  if (typeof category !== 'string' || !WASTE_CATEGORIES.has(category)) {
+    throw new Error(`Invalid official runtime shard rule ${id}: category is invalid`);
+  }
+
+  const weekdays = value.weekdays;
+  if (
+    !Array.isArray(weekdays)
+    || !weekdays.every((weekday) => Number.isInteger(weekday) && weekday >= 0 && weekday <= 6)
+    || new Set(weekdays).size !== weekdays.length
+  ) {
+    throw new Error(`Invalid official runtime shard rule ${id}: weekdays must contain unique integers from 0 to 6`);
+  }
+
+  const timeWindows = value.timeWindows;
+  if (!Array.isArray(timeWindows)) {
+    throw new Error(`Invalid official runtime shard rule ${id}: timeWindows must be an array`);
+  }
+  for (const window of timeWindows) {
+    if (!isRecord(window) || !isValidTime(window.start) || !isValidTime(window.end)) {
+      throw new Error(`Invalid official runtime shard rule ${id}: timeWindows contains an invalid time window`);
+    }
+  }
+
+  const excludedDates = requireStringArray(value, 'excludedDates', `shard rule ${id}`);
+  if (!excludedDates.every((date) => /^\d{4}-\d{2}-\d{2}$/u.test(date))) {
+    throw new Error(`Invalid official runtime shard rule ${id}: excludedDates contains an invalid date`);
+  }
+
+  const instructions = requireStringArray(value, 'instructions', `shard rule ${id}`);
+
+  const confidence = value.confidence;
+  if (typeof confidence !== 'string' || !RULE_CONFIDENCE.has(confidence)) {
+    throw new Error(`Invalid official runtime shard rule ${id}: confidence is invalid`);
+  }
+
+  if (!isRecord(value.provenance)) {
+    throw new Error(`Invalid official runtime shard rule ${id}: provenance must be an object`);
+  }
+  const provenance = {
+    sourceId: requireString(value.provenance, 'sourceId', `shard rule ${id} provenance`),
+    sourceName: requireString(value.provenance, 'sourceName', `shard rule ${id} provenance`),
+    sourceUrl: requireString(value.provenance, 'sourceUrl', `shard rule ${id} provenance`),
+    sourceUpdatedAt: requireNullableString(value.provenance, 'sourceUpdatedAt', `shard rule ${id} provenance`),
+    importedAt: requireString(value.provenance, 'importedAt', `shard rule ${id} provenance`),
+    authorityName: requireNullableString(value.provenance, 'authorityName', `shard rule ${id} provenance`),
+    authorityContact: requireNullableString(value.provenance, 'authorityContact', `shard rule ${id} provenance`),
+  };
+
+  if (provenance.importedAt !== importedAt) {
+    throw new Error(`Invalid official runtime shard rule ${id}: provenance.importedAt does not match shard importedAt`);
+  }
+
+  return {
+    id,
+    regionId: ruleRegionId,
+    category: category as CollectionRule['category'],
+    weekdays: weekdays as number[],
+    timeWindows: timeWindows as CollectionRule['timeWindows'],
+    excludedDates,
+    instructions,
+    confidence: confidence as CollectionRule['confidence'],
+    provenance,
+  };
 }
 
 export function serializeOfficialRuntimeManifest(manifest: OfficialRuntimeManifest): string {
@@ -173,20 +280,13 @@ export function loadOfficialRuntimeShard(text: string, expectedRegionId: string)
     throw new Error('Invalid official runtime shard: rules must be an array');
   }
 
-  for (const rule of parsed.rules) {
-    if (!isRecord(rule) || typeof rule.regionId !== 'string') {
-      throw new Error('Invalid official runtime shard: every rule must contain a regionId');
-    }
-    if (rule.regionId !== regionId) {
-      throw new Error(`Runtime shard rule region mismatch: expected ${regionId}, received ${String(rule.regionId)}`);
-    }
-  }
+  const rules = parsed.rules.map((rule) => validateRuntimeRule(rule, regionId, importedAt));
 
   return {
     schemaVersion: 1,
     importedAt,
     regionId,
-    rules: parsed.rules as CollectionRule[],
+    rules,
   };
 }
 
