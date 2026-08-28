@@ -129,6 +129,45 @@ test('runtime shard loader rejects a shard for a different region', () => {
   );
 });
 
+test('runtime shard loader rejects malformed collection rule fields', () => {
+  const result = runtimeDataAssets.buildOfficialRuntimeAssets(bundle);
+  const base = structuredClone(result.shards[0].asset);
+  const expectedRegionId = base.regionId;
+
+  const cases = [
+    {
+      name: 'category',
+      mutate: (asset) => { asset.rules[0].category = 'unknown'; },
+      error: /category/,
+    },
+    {
+      name: 'weekday',
+      mutate: (asset) => { asset.rules[0].weekdays = [9]; },
+      error: /weekdays/,
+    },
+    {
+      name: 'time window',
+      mutate: (asset) => { asset.rules[0].timeWindows = [{ start: '25:00', end: '23:00' }]; },
+      error: /timeWindows/,
+    },
+    {
+      name: 'provenance',
+      mutate: (asset) => { delete asset.rules[0].provenance.sourceId; },
+      error: /provenance\.sourceId/,
+    },
+  ];
+
+  for (const item of cases) {
+    const asset = structuredClone(base);
+    item.mutate(asset);
+    assert.throws(
+      () => runtimeDataAssets.loadOfficialRuntimeShard(JSON.stringify(asset), expectedRegionId),
+      item.error,
+      item.name,
+    );
+  }
+});
+
 test('runtime manifest loader rejects unsupported schema versions', () => {
   assert.equal(typeof runtimeDataAssets?.loadOfficialRuntimeManifest, 'function');
 
