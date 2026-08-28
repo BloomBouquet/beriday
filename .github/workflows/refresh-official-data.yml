@@ -43,6 +43,9 @@ jobs:
           --report-output ./data/reports/official-data-validation.json
           --imported-at "$IMPORTED_AT"
 
+      - name: Verify production data pair
+        run: npm run verify:production-data
+
       - name: Run repository verification
         run: |
           npm run test:domain
@@ -87,6 +90,7 @@ jobs:
           - DATA_GO_KR_API_KEY는 GitHub Actions secret으로만 주입했습니다.
           - refresh CLI가 official-data.json과 validation report를 같은 bundle에서 생성합니다.
           - validation summary에 critical error가 있으면 파일 갱신과 PR 생성을 중단합니다.
+          - production data gate가 asset과 validation report의 timestamp, count, source 기준일, warning을 다시 대조합니다.
 
           ## 📌 영향 범위
           - public/data/official-data.json
@@ -94,6 +98,7 @@ jobs:
           - production Today/Weekly/Settings 데이터 근거
 
           ## ✅ 테스트
+          - production data pair verification
           - Domain test
           - UI test
           - TypeScript typecheck

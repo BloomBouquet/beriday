@@ -12,6 +12,7 @@
     "build:domain": "tsc -p tsconfig.build.json",
     "build:official-data": "npm run build:domain && node scripts/build-official-data.mjs",
     "refresh:official-data": "npm run build:domain && node scripts/refresh-official-data.mjs",
+    "verify:production-data": "npm run build:domain && node scripts/verify-production-data.mjs --asset ./public/data/official-data.json --report ./data/reports/official-data-validation.json",
     "test:domain": "npm run build:domain && node --test tests/unit/*.test.mjs",
     "test": "vitest run"
   },
