@@ -17,6 +17,12 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Verify production data pair
+        run: npm run verify:production-data
+      - name: Generate and verify runtime data shards
+        run: |
+          npm run build:runtime-data
+          npm run verify:runtime-data
       - name: Domain tests
         run: npm run test:domain
       - name: UI tests when configured
