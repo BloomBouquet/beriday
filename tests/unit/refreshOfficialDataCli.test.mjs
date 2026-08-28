@@ -17,10 +17,24 @@ async function runCli(args, env = {}) {
   });
 }
 
+test('requires an explicit validation report output before checking API credentials', async () => {
+  await assert.rejects(
+    runCli([
+      '--output', '/tmp/official-data.json',
+      '--imported-at', '2026-08-28T00:00:00.000Z',
+    ]),
+    (error) => {
+      assert.match(error.stderr, /--report-output <json>/);
+      return true;
+    },
+  );
+});
+
 test('requires DATA_GO_KR_API_KEY without accepting the credential on the command line', async () => {
   await assert.rejects(
     runCli([
       '--output', '/tmp/official-data.json',
+      '--report-output', '/tmp/official-data-validation.json',
       '--imported-at', '2026-08-28T00:00:00.000Z',
     ]),
     (error) => {
@@ -30,17 +44,21 @@ test('requires DATA_GO_KR_API_KEY without accepting the credential on the comman
   );
 });
 
-test('does not modify an existing output asset when refresh cannot start without credentials', async () => {
+test('does not modify existing asset or report when refresh cannot start without credentials', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'beriday-refresh-cli-'));
   const output = path.join(dir, 'official-data.json');
-  const previous = '{"previous":true}\n';
+  const reportOutput = path.join(dir, 'official-data-validation.json');
+  const previousAsset = '{"previousAsset":true}\n';
+  const previousReport = '{"previousReport":true}\n';
 
   try {
-    await writeFile(output, previous, 'utf8');
+    await writeFile(output, previousAsset, 'utf8');
+    await writeFile(reportOutput, previousReport, 'utf8');
 
     await assert.rejects(
       runCli([
         '--output', output,
+        '--report-output', reportOutput,
         '--imported-at', '2026-08-28T00:00:00.000Z',
       ]),
       (error) => {
@@ -49,7 +67,8 @@ test('does not modify an existing output asset when refresh cannot start without
       },
     );
 
-    assert.equal(await readFile(output, 'utf8'), previous);
+    assert.equal(await readFile(output, 'utf8'), previousAsset);
+    assert.equal(await readFile(reportOutput, 'utf8'), previousReport);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
