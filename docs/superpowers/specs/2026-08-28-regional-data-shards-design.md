@@ -11,6 +11,7 @@ The nationwide canonical asset and validation report are valuable audit artifact
 - Avoid loading the nationwide rule set during initial application startup.
 - Keep the full nationwide canonical asset and validation report unchanged as auditable production source artifacts.
 - Preserve the existing `RegionOption`, `CollectionRule`, provenance, confidence, and schedule evaluation semantics.
+- Preserve the existing source validation summary shown in the UI without loading the nationwide rule set.
 - Allow the region selector to work before any rule shard has been downloaded.
 - Fetch only the rule data required for the selected municipality.
 - Fail closed if a manifest or shard is malformed, missing, stale, or inconsistent.
@@ -60,7 +61,7 @@ Generated runtime assets live under:
 - `public/data/runtime/manifest.json`
 - `public/data/runtime/shards/<encoded-shard-id>.json`
 
-The exact file name is derived deterministically from a stable shard ID rather than using raw Korean path segments directly.
+The exact file name is derived deterministically from a stable shard ID rather than using raw Korean path segments directly. `public/data/runtime/` is generated output and is not committed; local development, CI, refresh verification, and production build regenerate it from the canonical pair.
 
 ### Manifest
 
@@ -69,11 +70,12 @@ Schema version 1 contains:
 - `schemaVersion`
 - `importedAt`
 - `sourceUpdatedAt`
+- `source`: canonical source summary with `totalRows`, `acceptedRows`, and `rejectedRows`
 - `regions`: all selectable regions with `regionId`, `sido`, `sigungu`, `areaName`, and `shardId`
 - `shards`: metadata keyed by `shardId`, including path, region count, and rule count
 - total region and rule counts for cross-checking
 
-The manifest intentionally contains no collection rules.
+The manifest intentionally contains no collection rules. The source summary is limited to the counts already shown by the existing trust UI.
 
 ### Shard
 
@@ -96,13 +98,13 @@ The client never constructs arbitrary URLs from a selected region. It resolves t
 
 ## Build Pipeline
 
-A new deterministic runtime-data generator reads the already verified nationwide asset and writes the manifest plus all municipality shards.
+A new deterministic runtime-data generator reads the already verified nationwide asset and validation report and writes the manifest plus all municipality shards.
 
 Pipeline order:
 
 1. Verify canonical production asset/report pair.
-2. Generate runtime manifest and shards from the canonical bundle.
-3. Verify runtime assets against the canonical bundle.
+2. Generate runtime manifest and shards from the canonical bundle and source summary.
+3. Verify runtime assets against the canonical bundle and validation report.
 4. Run domain/UI/typecheck tests.
 5. Build Vite application.
 6. Verify generated runtime assets are present in `dist/data/runtime` and match the public runtime source.
@@ -112,23 +114,18 @@ The generator must remove stale generated shard files before writing a new set s
 
 ## Runtime Data Loader
 
-A focused data module will expose two operations:
-
-- `loadOfficialDataManifest(url)`
-- `loadOfficialDataShard(manifest, regionId)`
-
-The loader validates schema shape and consistency before returning data.
+A focused data module will expose manifest loading and region-to-shard rule loading. The loader validates schema shape and consistency before returning data.
 
 `OfficialDataApp` changes from one startup fetch into two phases:
 
-1. Fetch and validate `manifest.json`, then render `App` with complete region options and no loaded rules.
+1. Fetch and validate `manifest.json`, then render `App` with complete region options, source summary, and no loaded rules.
 2. When a region becomes active, fetch its shard and provide only that shard's rules to `App`.
 
 ## App Integration
 
 The current `App` owns region selection internally. To avoid loading every shard, it needs a narrow callback interface so the data layer knows which region became active.
 
-Add an optional prop such as `onRegionChange(regionId)` while keeping existing default behavior and storage semantics. `OfficialDataApp` listens to this callback, resolves the selected region through the manifest, loads the shard, and passes the resulting rules back to `App`.
+Add an optional `onRegionChange(regionId)` callback while keeping existing default behavior and storage semantics. `OfficialDataApp` listens to this callback, resolves the selected region through the manifest, loads the shard, and passes the resulting rules back to `App`.
 
 A saved region can trigger its shard load immediately after the manifest is ready. A new selection triggers a new shard request. If two selections happen quickly, stale fetch results must not replace data for the newest selection.
 
@@ -153,7 +150,7 @@ Shard failure:
 
 ## Cache Behavior
 
-Use browser HTTP caching for shard files, but preserve update correctness using `importedAt` consistency checks between manifest and shard. The first implementation does not add application-level persistent caching.
+Use browser HTTP caching for shard files, but preserve update correctness using `importedAt` and `sourceUpdatedAt` consistency checks between manifest and shard. The first implementation does not add application-level persistent caching.
 
 Within one mounted `OfficialDataApp`, successfully loaded shards may be memoized in memory by `shardId` to avoid repeated fetches while switching between regions in the same municipality.
 
@@ -162,6 +159,7 @@ Within one mounted `OfficialDataApp`, successfully loaded shards may be memoized
 Runtime verification must fail if any of the following is true:
 
 - manifest `importedAt` differs from canonical asset `importedAt`
+- manifest `sourceUpdatedAt` or source counts differ from the canonical validation inputs
 - manifest region count differs from canonical region count
 - manifest rule count differs from canonical rule count
 - a canonical region is missing or duplicated in the manifest
@@ -180,6 +178,7 @@ Rule identity comparison must be deterministic and based on the serialized canon
 
 - deterministic shard ID/path generation
 - manifest generation from canonical fixture
+- source summary preservation
 - every region assigned exactly once
 - every rule assigned exactly once
 - malformed/foreign shard rejection
@@ -191,6 +190,7 @@ Rule identity comparison must be deterministic and based on the serialized canon
 
 - startup fetch requests manifest only, not nationwide `official-data.json`
 - region options render from manifest
+- existing source validation summary renders from manifest
 - selecting a region requests its declared shard
 - switching regions in the same shard reuses loaded data
 - switching municipalities requests a different shard
@@ -207,15 +207,16 @@ Rule identity comparison must be deterministic and based on the serialized canon
 
 ## Migration
 
-The full `public/data/official-data.json` remains committed and refreshed exactly as today. Runtime files are generated from it and committed only if keeping deployable static data in source control remains convenient; otherwise they may be generated during build. For the first implementation, runtime assets should be generated deterministically during the data refresh and release verification paths so local Vite development and deployed builds use the same files.
+The full `public/data/official-data.json` remains committed and refreshed exactly as today. Runtime files are generated deterministically from it and the validation report during local dev/build, refresh verification, and release verification. They are ignored by Git and copied into `dist` by Vite after generation.
 
 No production-data consumer should remove the canonical asset until runtime shard verification has been proven in CI.
 
 ## Success Criteria
 
 - Initial app startup does not request `/data/official-data.json`.
-- The initial runtime data request contains only the manifest/catalog, not 34,090 rules.
+- The initial runtime data request contains only the manifest/catalog and source summary, not 34,090 rules.
 - Selecting a region loads only one municipality shard.
 - Existing schedule results for a given region remain semantically identical to results computed from the nationwide canonical bundle.
+- Existing source validation summary remains visible.
 - Production refresh, CI, and release remain fail-closed.
 - Canonical totals remain 4,120 regions and 34,090 rules for the current data snapshot unless the official source itself changes.
