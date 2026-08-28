@@ -8,7 +8,7 @@ import type { CollectionRule } from './domain/waste/types';
 import { createOfficialRuntimeLoader } from './data/runtime/officialRuntimeLoader';
 import type { OfficialRuntimeManifest } from './data/runtime/officialRuntimeData';
 
-const DEFAULT_MANIFEST_URL = '/data/runtime/manifest.json';
+const DEFAULT_MANIFEST_URL = `${import.meta.env.BASE_URL}data/runtime/manifest.json`;
 
 type OfficialDataAppProps = {
   manifestUrl?: string;
