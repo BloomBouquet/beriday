@@ -32,6 +32,11 @@ jobs:
       - name: Verify production data pair
         run: npm run verify:production-data
 
+      - name: Generate and verify runtime data shards
+        run: |
+          npm run build:runtime-data
+          npm run verify:runtime-data
+
       - name: Run repository verification
         run: |
           npm run test:domain
@@ -46,6 +51,21 @@ jobs:
         run: |
           test -s dist/data/official-data.json
           cmp public/data/official-data.json dist/data/official-data.json
+
+          test -s public/data/runtime/manifest.json
+          test -s dist/data/runtime/manifest.json
+          cmp public/data/runtime/manifest.json dist/data/runtime/manifest.json
+
+          source_shard_count=$(find public/data/runtime/shards -type f -name '*.json' | wc -l)
+          dist_shard_count=$(find dist/data/runtime/shards -type f -name '*.json' | wc -l)
+          test "$source_shard_count" -gt 0
+          test "$source_shard_count" -eq "$dist_shard_count"
+
+          find public/data/runtime/shards -type f -name '*.json' -print0 | sort -z | while IFS= read -r -d '' source; do
+            relative="${source#public/}"
+            test -s "dist/$relative"
+            cmp "$source" "dist/$relative"
+          done
 
       - name: Write release metadata
         shell: bash
